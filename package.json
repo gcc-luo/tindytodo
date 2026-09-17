@@ -8,11 +8,14 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run --config vitest.config.ts",
+    "release:prepare": "node scripts/release-version.mjs",
+    "release:verify": "node scripts/release-version.mjs --verify",
     "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.1",
     "@tauri-apps/plugin-global-shortcut": "^2.3.1",
+    "@tauri-apps/plugin-updater": "~2.11.0",
     "lucide-vue-next": "^0.468.0",
     "vue": "^3.5.13"
   },

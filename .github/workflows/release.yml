@@ -1,0 +1,95 @@
+name: Release Windows
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    name: Build and publish Windows x64 release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify release version
+        run: node scripts/release-version.mjs --verify $env:GITHUB_REF_NAME
+
+      - name: Install NSIS
+        run: choco install nsis --yes --no-progress
+
+      - name: Build installers and signed updater bundle
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw 'Configure the TAURI_SIGNING_PRIVATE_KEY Actions secret before publishing a release.'
+          }
+          pnpm tauri build --target x86_64-pc-windows-msvc
+
+      - name: Generate updater manifest
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          $bundleRoot = Join-Path $PWD 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle'
+          $installer = Get-ChildItem (Join-Path $bundleRoot 'nsis') -Filter '*.exe' -File | Select-Object -First 1
+          if (-not $installer) { throw 'NSIS installer was not produced.' }
+          $signaturePath = "$($installer.FullName).sig"
+          if (-not (Test-Path -LiteralPath $signaturePath)) { throw "Updater signature not found: $signaturePath" }
+          $signature = (Get-Content -Raw -LiteralPath $signaturePath).Trim()
+          if (-not $signature) { throw 'Updater signature is empty.' }
+          $manifest = [ordered]@{
+            version = $version
+            notes = "TinyTodo $version for Windows x64."
+            pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
+            platforms = [ordered]@{
+              'windows-x86_64' = [ordered]@{
+                signature = $signature
+                url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:GITHUB_REF_NAME/$($installer.Name)"
+              }
+            }
+          }
+          $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath 'latest.json' -Encoding utf8NoBOM
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: TinyTodo ${{ github.ref_name }} (Windows)
+          body: |
+            TinyTodo Windows x64 installer and signed updater package.
+
+            - Download the `.msi` or NSIS `.exe` to install manually.
+            - The `.exe.sig` and `latest.json` assets enable in-app updates.
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: |
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe.sig
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+            latest.json

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { check } from '@tauri-apps/plugin-updater'
 import {
   Archive, CalendarDays, Check, CheckCheck, ChevronRight, Clock3,
   Inbox, ListPlus, MoreHorizontal, Plus, Search, Settings2, Sparkles, Sun, X,
@@ -25,6 +26,8 @@ const toast = ref('')
 const shortcutLabel = ref('Ctrl + Alt + Space')
 const shortcutRegistered = ref(true)
 const settingsOpen = ref(false)
+const updateStatus = ref('')
+const checkingForUpdates = ref(false)
 const addTitle = ref('')
 const addOptionsOpen = ref(false)
 const addDate = ref('')
@@ -251,6 +254,26 @@ async function changeShortcut(label: string): Promise<void> {
   }
 }
 
+async function checkForUpdates(): Promise<void> {
+  if (checkingForUpdates.value) return
+  checkingForUpdates.value = true
+  updateStatus.value = '正在检查更新…'
+  try {
+    const update = await check()
+    if (!update) {
+      updateStatus.value = '当前已是最新版本'
+      return
+    }
+    updateStatus.value = `发现新版本 ${update.version}，正在下载并安装…`
+    await update.downloadAndInstall()
+    updateStatus.value = '更新已安装，应用即将重新启动'
+  } catch (error) {
+    updateStatus.value = `检查更新失败：${error instanceof Error ? error.message : String(error)}`
+  } finally {
+    checkingForUpdates.value = false
+  }
+}
+
 onMounted(async () => {
   await loadData()
   unlisten = await subscribeToChanges(() => { void loadData() })
@@ -419,7 +442,7 @@ onBeforeUnmount(() => {
       <section class="new-list-modal settings-modal">
         <div class="modal-icon"><Settings2 :size="18" /></div>
         <h2>设置</h2>
-        <p>调整快速记录的全局快捷键。</p>
+        <p>调整快速记录快捷键，或检查 TinyTodo 更新。</p>
         <label class="settings-label" for="shortcut-select">快速记录</label>
         <select id="shortcut-select" class="settings-select" :value="shortcutLabel" @change="changeShortcut(($event.target as HTMLSelectElement).value)">
           <option value="Ctrl + Shift + Space">Ctrl + Shift + Space</option>
@@ -427,6 +450,16 @@ onBeforeUnmount(() => {
           <option value="Alt + Shift + T">Alt + Shift + T</option>
         </select>
         <p class="settings-note">快捷键若被其他程序占用，会保留当前设置。应用关闭时会收进系统托盘。</p>
+        <div class="update-row">
+          <div class="update-copy">
+            <strong>软件更新</strong>
+            <span v-if="updateStatus" role="status">{{ updateStatus }}</span>
+            <span v-else>从 GitHub 检查 Windows 版本更新</span>
+          </div>
+          <button class="update-button" type="button" :disabled="checkingForUpdates" @click="checkForUpdates">
+            {{ checkingForUpdates ? '检查中…' : '检查更新' }}
+          </button>
+        </div>
         <div class="modal-actions"><button class="modal-primary" type="button" @click="settingsOpen = false">完成</button></div>
       </section>
     </div>

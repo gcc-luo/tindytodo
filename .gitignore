@@ -5,3 +5,5 @@ src-tauri/gen/
 .superpowers/
 *.db
 *.sqlite3
+*.key
+*.key.pub
