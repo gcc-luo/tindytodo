@@ -59,8 +59,8 @@ async function readReleaseFiles() {
     readFile(paths.cargoLock, 'utf8'),
   ])
   return {
-    packageJson: JSON.parse(packageText),
-    tauriConfig: JSON.parse(tauriText),
+    packageJson: packageText,
+    tauriConfig: tauriText,
     cargoManifest,
     cargoLock,
   }
@@ -68,8 +68,8 @@ async function readReleaseFiles() {
 
 function assertVersions(files, expected) {
   const versions = {
-    'package.json': files.packageJson.version,
-    'src-tauri/tauri.conf.json': files.tauriConfig.version,
+    'package.json': JSON.parse(files.packageJson).version,
+    'src-tauri/tauri.conf.json': JSON.parse(files.tauriConfig).version,
     'src-tauri/Cargo.toml': cargoPackageVersion(files.cargoManifest),
     'src-tauri/Cargo.lock': lockPackageVersion(files.cargoLock),
   }
@@ -82,8 +82,18 @@ function assertVersions(files, expected) {
 async function prepare(input) {
   const version = normalizeVersion(input)
   const files = await readReleaseFiles()
-  files.packageJson.version = version
-  files.tauriConfig.version = version
+  files.packageJson = replaceFirst(
+    files.packageJson,
+    /^(\s*"version"\s*:\s*")[^"]+("\s*,?\s*)$/m,
+    `$1${version}$2`,
+    'package.json',
+  )
+  files.tauriConfig = replaceFirst(
+    files.tauriConfig,
+    /^(\s*"version"\s*:\s*")[^"]+("\s*,?\s*)$/m,
+    `$1${version}$2`,
+    'tauri.conf.json',
+  )
   files.cargoManifest = setCargoPackageVersion(files.cargoManifest, version)
   files.cargoLock = replaceFirst(
     files.cargoLock,
@@ -92,8 +102,8 @@ async function prepare(input) {
     'Cargo.lock tinytodo package',
   )
   await Promise.all([
-    writeFile(paths.packageJson, `${JSON.stringify(files.packageJson, null, 2)}\n`),
-    writeFile(paths.tauriConfig, `${JSON.stringify(files.tauriConfig, null, 2)}\n`),
+    writeFile(paths.packageJson, files.packageJson),
+    writeFile(paths.tauriConfig, files.tauriConfig),
     writeFile(paths.cargoManifest, files.cargoManifest),
     writeFile(paths.cargoLock, files.cargoLock),
   ])
