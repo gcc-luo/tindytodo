@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "TinyTodo",
+  "version": "0.1.0",
+  "identifier": "com.gengcc.tinytodo",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "TinyTodo",
+        "width": 1120,
+        "height": 760,
+        "minWidth": 860,
+        "minHeight": 580,
+        "center": true,
+        "resizable": true
+      },
+      {
+        "label": "quick-add",
+        "title": "快速添加 · TinyTodo",
+        "url": "index.html?quickAdd=1",
+        "width": 460,
+        "height": 220,
+        "minWidth": 420,
+        "minHeight": 200,
+        "center": true,
+        "visible": false,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true
+      }
+    ],
+    "security": {
+      "csp": null,
+      "capabilities": ["default"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis"],
+    "icon": ["icons/icon.png", "icons/icon.ico"],
+    "shortDescription": "轻量本地待办清单",
+    "category": "Productivity"
+  }
+}
