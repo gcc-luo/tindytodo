@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { check } from '@tauri-apps/plugin-updater'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   Archive, CalendarDays, Check, CheckCheck, ChevronRight, Clock3,
   Inbox, ListPlus, MoreHorizontal, Plus, Search, Settings2, Sparkles, Sun, X,
@@ -10,12 +11,14 @@ import TaskRow from './components/TaskRow.vue'
 import QuickAddWindow from './components/QuickAddWindow.vue'
 import {
   createList, createTask, deleteList, deleteTask, getAppData, getShortcutInfo, reorderTasks, setShortcut,
-  renameList, subscribeToChanges, toggleTask, updateTask,
+  renameList, subscribeToChanges, toggleTask, updateTask, defaultWorkSettings, getWorkSettings, saveWorkSettings,
 } from './api'
 import { countTasks, filterTasks, localDateKey } from './lib/taskFilters'
-import type { AppData, TaskDraft, TaskView, TodoList, TaskChanges } from './types'
+import { crossedOccurrence, formatCountdown, nextReminder, type ReminderKind } from './lib/workReminders'
+import type { AppData, TaskDraft, TaskView, TodoList, TaskChanges, WorkSettings } from './types'
 
 const isQuickAdd = new URLSearchParams(window.location.search).has('quickAdd')
+const nativeApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 const appData = ref<AppData>({ tasks: [], lists: [] })
 const loading = ref(true)
 const activeView = ref<TaskView>('today')
@@ -28,6 +31,10 @@ const shortcutRegistered = ref(true)
 const settingsOpen = ref(false)
 const updateStatus = ref('')
 const checkingForUpdates = ref(false)
+const workSettings = ref<WorkSettings>(defaultWorkSettings())
+const settingsDraft = ref<WorkSettings>(defaultWorkSettings())
+const reminderNow = ref(new Date())
+const celebration = ref<ReminderKind | null>(null)
 const addTitle = ref('')
 const addOptionsOpen = ref(false)
 const addDate = ref('')
@@ -43,6 +50,10 @@ const dragTargetId = ref<number | null>(null)
 let unlisten: (() => void) | undefined
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let dayTimer: ReturnType<typeof setInterval> | undefined
+let reminderTimer: ReturnType<typeof setInterval> | undefined
+let previousReminderTime: Date | null = null
+let reminderTickBusy = false
+const triggeredReminders = new Set<string>()
 
 const today = ref(localDateKey())
 const visibleTasks = computed(() => filterTasks(
@@ -73,6 +84,11 @@ const viewSubtitle = computed(() => {
   if (activeView.value === 'completed') return '已经完成的每一件事'
   return '属于这个清单的任务'
 })
+const nextWorkReminder = computed(() => nextReminder(workSettings.value, reminderNow.value))
+const reminderCountdown = computed(() => nextWorkReminder.value
+  ? formatCountdown(nextWorkReminder.value.at, reminderNow.value)
+  : '')
+const reminderTitle = computed(() => nextWorkReminder.value?.kind === 'offWork' ? '距离下班' : '距离午休')
 
 function dateLabel(date: Date): string {
   return new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(date)
@@ -99,6 +115,7 @@ function flash(message: string): void {
 async function loadData(): Promise<void> {
   try {
     appData.value = await getAppData()
+    workSettings.value = await getWorkSettings()
     const shortcut = await getShortcutInfo()
     shortcutLabel.value = shortcut.label
     shortcutRegistered.value = shortcut.registered
@@ -108,6 +125,120 @@ async function loadData(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+function cloneWorkSettings(settings: WorkSettings): WorkSettings {
+  return {
+    lunch: { ...settings.lunch },
+    offWork: { ...settings.offWork },
+  }
+}
+
+function openSettings(): void {
+  settingsDraft.value = cloneWorkSettings(workSettings.value)
+  settingsOpen.value = true
+}
+
+function validateWorkSettings(settings: WorkSettings): string | null {
+  for (const reminder of [settings.lunch, settings.offWork]) {
+    if (!reminder.enabled) continue
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(reminder.time)) return '请输入有效的提醒时间'
+    if (reminder.repeat === 'once' && !reminder.date) return '一次性提醒需要选择日期'
+  }
+  return null
+}
+
+function changeReminderRepeat(kind: 'lunch' | 'offWork'): void {
+  const reminder = settingsDraft.value[kind]
+  if (reminder.repeat === 'daily') reminder.date = null
+  else if (!reminder.date) reminder.date = today.value
+}
+
+async function saveSettings(): Promise<void> {
+  const error = validateWorkSettings(settingsDraft.value)
+  if (error) {
+    flash(error)
+    return
+  }
+  try {
+    await saveWorkSettings(settingsDraft.value)
+    workSettings.value = cloneWorkSettings(settingsDraft.value)
+    settingsOpen.value = false
+    flash('工作时间提醒已保存')
+  } catch (error) {
+    flash(error instanceof Error ? error.message : String(error))
+  }
+}
+
+async function setCelebrationWindow(fullscreen: boolean): Promise<void> {
+  if (!nativeApp || isQuickAdd) return
+  const window = getCurrentWindow()
+  await window.setFullscreen(fullscreen)
+  await window.setAlwaysOnTop(fullscreen)
+  if (!fullscreen) await window.setFocus()
+}
+
+async function showCelebration(kind: ReminderKind): Promise<void> {
+  celebration.value = kind
+  try {
+    await setCelebrationWindow(true)
+  } catch (error) {
+    flash(`全屏庆祝启动失败：${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+async function dismissCelebration(): Promise<void> {
+  if (!celebration.value) return
+  celebration.value = null
+  try {
+    await setCelebrationWindow(false)
+  } catch (error) {
+    flash(error instanceof Error ? error.message : String(error))
+  }
+}
+
+async function triggerReminder(kind: ReminderKind): Promise<void> {
+  const reminder = workSettings.value[kind]
+  if (!reminder.enabled) return
+  if (reminder.repeat === 'once') {
+    const updated: WorkSettings = {
+      ...workSettings.value,
+      [kind]: { ...reminder, enabled: false, completed: true },
+    }
+    try {
+      await saveWorkSettings(updated)
+      workSettings.value = updated
+    } catch (error) {
+      flash(error instanceof Error ? error.message : String(error))
+    }
+  }
+  await showCelebration(kind)
+}
+
+async function tickReminders(): Promise<void> {
+  if (reminderTickBusy) return
+  reminderTickBusy = true
+  try {
+    const now = new Date()
+    const previous = previousReminderTime
+    reminderNow.value = now
+    previousReminderTime = now
+    if (!previous) return
+    for (const kind of ['lunch', 'offWork'] as ReminderKind[]) {
+      const reminder = workSettings.value[kind]
+      if (!crossedOccurrence(reminder, previous, now)) continue
+      const key = `${kind}:${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`
+      if (triggeredReminders.has(key)) continue
+      triggeredReminders.add(key)
+      await triggerReminder(kind)
+    }
+  } finally {
+    reminderTickBusy = false
+  }
+}
+
+function handleGlobalKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && celebration.value) void dismissCelebration()
 }
 
 async function addTask(): Promise<void> {
@@ -275,14 +406,19 @@ async function checkForUpdates(): Promise<void> {
 }
 
 onMounted(async () => {
+  if (isQuickAdd) return
   await loadData()
   unlisten = await subscribeToChanges(() => { void loadData() })
   dayTimer = setInterval(() => { today.value = localDateKey() }, 60_000)
+  reminderTimer = setInterval(() => { void tickReminders() }, 1000)
+  window.addEventListener('keydown', handleGlobalKeydown)
 })
 onBeforeUnmount(() => {
   unlisten?.()
   if (dayTimer) clearInterval(dayTimer)
+  if (reminderTimer) clearInterval(reminderTimer)
   if (toastTimer) clearTimeout(toastTimer)
+  window.removeEventListener('keydown', handleGlobalKeydown)
 })
 </script>
 
@@ -351,10 +487,16 @@ onBeforeUnmount(() => {
             <button class="icon-button" type="button" aria-label="关闭搜索" @click="closeSearch"><X :size="15" /></button>
           </label>
           <button v-else class="icon-button search-trigger" type="button" aria-label="搜索任务" title="搜索任务" @click="beginSearch"><Search :size="17" /></button>
-          <button class="help-button" type="button" title="设置" aria-label="设置" @click="settingsOpen = true"><Settings2 :size="16" /></button>
+          <button class="help-button" type="button" title="设置" aria-label="设置" @click="openSettings"><Settings2 :size="16" /></button>
           <div class="avatar">T</div>
         </div>
       </header>
+
+      <div v-if="nextWorkReminder" class="work-reminder-bar" role="status">
+        <div class="work-reminder-copy"><Sparkles :size="15" /><span>{{ reminderTitle }}</span></div>
+        <strong>{{ reminderCountdown }}</strong>
+        <span class="work-reminder-hint">{{ nextWorkReminder.kind === 'offWork' ? '今天也辛苦了' : '记得起来休息一下' }}</span>
+      </div>
 
       <div class="content-scroll">
         <section class="task-page">
@@ -442,7 +584,21 @@ onBeforeUnmount(() => {
       <section class="new-list-modal settings-modal">
         <div class="modal-icon"><Settings2 :size="18" /></div>
         <h2>设置</h2>
-        <p>调整快速记录快捷键，或检查 TinyTodo 更新。</p>
+        <p>调整工作节奏提醒、快速记录快捷键，或检查 TinyTodo 更新。</p>
+        <div class="work-settings-section">
+          <div class="settings-section-heading"><strong>工作节奏</strong><span>到点提醒你休息和下班</span></div>
+          <div v-for="item in ([['lunch', '午休提醒'], ['offWork', '下班提醒']] as const)" :key="item[0]" class="reminder-setting-card">
+            <div class="reminder-setting-head">
+              <label class="reminder-toggle"><input v-model="settingsDraft[item[0]].enabled" type="checkbox" /><span class="toggle-track"></span><strong>{{ item[1] }}</strong></label>
+              <input v-model="settingsDraft[item[0]].time" class="reminder-time" type="time" :disabled="!settingsDraft[item[0]].enabled" />
+            </div>
+            <div class="reminder-setting-fields" :class="{ disabled: !settingsDraft[item[0]].enabled }">
+              <label><span>重复</span><select v-model="settingsDraft[item[0]].repeat" :disabled="!settingsDraft[item[0]].enabled" @change="changeReminderRepeat(item[0])"><option value="daily">每天重复</option><option value="once">一次性</option></select></label>
+              <label v-if="settingsDraft[item[0]].repeat === 'once'"><span>日期</span><input v-model="settingsDraft[item[0]].date" type="date" :min="today" :disabled="!settingsDraft[item[0]].enabled" /></label>
+            </div>
+          </div>
+          <p class="settings-note">下班时间到达后，当前显示器会全屏撒花庆祝；点击屏幕或按 Esc 退出。</p>
+        </div>
         <label class="settings-label" for="shortcut-select">快速记录</label>
         <select id="shortcut-select" class="settings-select" :value="shortcutLabel" @change="changeShortcut(($event.target as HTMLSelectElement).value)">
           <option value="Ctrl + Shift + Space">Ctrl + Shift + Space</option>
@@ -460,8 +616,17 @@ onBeforeUnmount(() => {
             {{ checkingForUpdates ? '检查中…' : '检查更新' }}
           </button>
         </div>
-        <div class="modal-actions"><button class="modal-primary" type="button" @click="settingsOpen = false">完成</button></div>
+        <div class="modal-actions"><button class="text-button" type="button" @click="settingsOpen = false">取消</button><button class="modal-primary" type="button" @click="saveSettings">保存设置</button></div>
       </section>
+    </div>
+    <div v-if="celebration" class="celebration-screen" role="dialog" aria-modal="true" @click="dismissCelebration">
+      <div class="celebration-confetti" aria-hidden="true"><span v-for="n in 34" :key="n" :style="{ '--i': n }"></span></div>
+      <div class="celebration-message">
+        <Sparkles :size="42" stroke-width="1.4" />
+        <p class="celebration-kicker">{{ celebration === 'offWork' ? '工作完成' : '休息一下' }}</p>
+        <h2>{{ celebration === 'offWork' ? '下班啦，今天也辛苦了' : '午休时间到了' }}</h2>
+        <p>点击任意位置关闭庆祝</p>
+      </div>
     </div>
   </div>
 </template>

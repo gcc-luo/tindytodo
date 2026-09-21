@@ -41,6 +41,16 @@ fn get_app_data(db: State<'_, TodoDb>) -> Result<db::AppData, String> {
 }
 
 #[tauri::command]
+fn get_work_settings(db: State<'_, TodoDb>) -> Result<db::WorkSettings, String> {
+    db.work_settings()
+}
+
+#[tauri::command]
+fn save_work_settings(db: State<'_, TodoDb>, settings: db::WorkSettings) -> Result<(), String> {
+    db.save_work_settings(settings)
+}
+
+#[tauri::command]
 fn create_task(db: State<'_, TodoDb>, draft: TaskDraft) -> Result<db::TodoTask, String> {
     db.create_task(draft)
 }
@@ -241,6 +251,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_app_data,
+            get_work_settings,
+            save_work_settings,
             create_task,
             update_task,
             toggle_task,

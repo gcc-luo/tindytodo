@@ -48,6 +48,22 @@ pub struct AppData {
     pub lists: Vec<TodoList>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkReminderSettings {
+    pub enabled: bool,
+    pub time: String,
+    pub repeat: String,
+    pub date: Option<String>,
+    pub completed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkSettings {
+    pub lunch: WorkReminderSettings,
+    #[serde(rename = "offWork")]
+    pub off_work: WorkReminderSettings,
+}
+
 pub struct TodoDb {
     connection: Mutex<Connection>,
 }
@@ -119,6 +135,41 @@ impl TodoDb {
             tasks: read_tasks(&connection)?,
             lists: read_lists(&connection)?,
         })
+    }
+
+    pub fn work_settings(&self) -> Result<WorkSettings, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "数据库暂时不可用".to_string())?;
+        let stored: Option<String> = connection
+            .query_row(
+                "SELECT value FROM app_meta WHERE key='work_reminders_v1'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(db_error)?;
+        stored
+            .map(|value| serde_json::from_str(&value).map_err(|_| "工作时间设置已损坏，已恢复默认值".to_string()))
+            .unwrap_or_else(|| Ok(default_work_settings()))
+    }
+
+    pub fn save_work_settings(&self, settings: WorkSettings) -> Result<(), String> {
+        validate_work_settings(&settings)?;
+        let value = serde_json::to_string(&settings).map_err(|error| error.to_string())?;
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "数据库暂时不可用".to_string())?;
+        connection
+            .execute(
+                "INSERT INTO app_meta (key, value) VALUES ('work_reminders_v1', ?1)
+                 ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                [&value],
+            )
+            .map_err(db_error)?;
+        Ok(())
     }
 
     pub fn create_task(&self, draft: TaskDraft) -> Result<TodoTask, String> {
@@ -257,6 +308,44 @@ impl TodoDb {
         }
         Ok(())
     }
+}
+
+fn default_work_settings() -> WorkSettings {
+    WorkSettings {
+        lunch: WorkReminderSettings {
+            enabled: false,
+            time: "12:00".to_string(),
+            repeat: "daily".to_string(),
+            date: None,
+            completed: false,
+        },
+        off_work: WorkReminderSettings {
+            enabled: false,
+            time: "18:00".to_string(),
+            repeat: "daily".to_string(),
+            date: None,
+            completed: false,
+        },
+    }
+}
+
+fn validate_work_settings(settings: &WorkSettings) -> Result<(), String> {
+    for reminder in [&settings.lunch, &settings.off_work] {
+        if !["daily", "once"].contains(&reminder.repeat.as_str()) {
+            return Err("提醒重复方式无效".to_string());
+        }
+        if reminder.time.len() != 5
+            || !reminder.time.as_bytes()[2..3].eq(b":")
+            || reminder.time[..2].parse::<u8>().map_or(true, |hour| hour > 23)
+            || reminder.time[3..].parse::<u8>().map_or(true, |minute| minute > 59)
+        {
+            return Err("提醒时间格式无效".to_string());
+        }
+        if reminder.repeat == "once" && reminder.date.as_deref().map_or(true, |date| date.len() != 10) {
+            return Err("一次性提醒需要选择日期".to_string());
+        }
+    }
+    Ok(())
 }
 
 fn task_from_row(row: &Row<'_>) -> rusqlite::Result<TodoTask> {
@@ -473,5 +562,19 @@ mod tests {
         let persisted = reopened.app_data().unwrap();
         assert!(persisted.lists.is_empty());
         assert_eq!(persisted.tasks[0].title, "保留这条任务");
+    }
+
+    #[test]
+    fn work_settings_round_trip_through_app_meta() {
+        let folder = tempfile::tempdir().unwrap();
+        let db = TodoDb::open(&folder.path().join("tinytodo.sqlite3")).unwrap();
+        let mut settings = db.work_settings().unwrap();
+        settings.off_work.enabled = true;
+        settings.off_work.time = "17:30".to_string();
+        settings.off_work.repeat = "once".to_string();
+        settings.off_work.date = Some("2026-09-21".to_string());
+        db.save_work_settings(settings.clone()).unwrap();
+        assert_eq!(db.work_settings().unwrap().off_work.time, "17:30");
+        assert_eq!(db.work_settings().unwrap().off_work.date, settings.off_work.date);
     }
 }

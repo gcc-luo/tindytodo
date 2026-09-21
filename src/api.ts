@@ -1,13 +1,43 @@
 import { emit, listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
-import type { AppData, TaskDraft, TaskChanges, TodoList, TodoTask } from './types'
+import type { AppData, TaskDraft, TaskChanges, TodoList, TodoTask, WorkSettings } from './types'
 
 const STORAGE_KEY = 'tinytodo-local-v1'
+const WORK_SETTINGS_KEY = 'tinytodo-work-settings-v1'
 const nativeApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
 export interface ShortcutInfo {
   label: string
   registered: boolean
+}
+
+export const defaultWorkSettings = (): WorkSettings => ({
+  lunch: { enabled: false, time: '12:00', repeat: 'daily', date: null, completed: false },
+  offWork: { enabled: false, time: '18:00', repeat: 'daily', date: null, completed: false },
+})
+
+function readWorkSettings(): WorkSettings {
+  const saved = localStorage.getItem(WORK_SETTINGS_KEY)
+  if (!saved) return defaultWorkSettings()
+  try {
+    const parsed = JSON.parse(saved) as Partial<WorkSettings>
+    const defaults = defaultWorkSettings()
+    return {
+      lunch: { ...defaults.lunch, ...parsed.lunch },
+      offWork: { ...defaults.offWork, ...parsed.offWork },
+    }
+  } catch {
+    return defaultWorkSettings()
+  }
+}
+
+export async function getWorkSettings(): Promise<WorkSettings> {
+  return nativeApp ? invoke<WorkSettings>('get_work_settings') : readWorkSettings()
+}
+
+export async function saveWorkSettings(settings: WorkSettings): Promise<void> {
+  if (nativeApp) await invoke('save_work_settings', { settings })
+  else localStorage.setItem(WORK_SETTINGS_KEY, JSON.stringify(settings))
 }
 
 function readLocalData(): AppData {

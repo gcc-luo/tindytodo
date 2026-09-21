@@ -1,5 +1,19 @@
 export type TaskPriority = 0 | 1
 export type TaskStatus = 0 | 1
+export type ReminderRepeat = 'daily' | 'once'
+
+export interface WorkReminderSettings {
+  enabled: boolean
+  time: string
+  repeat: ReminderRepeat
+  date: string | null
+  completed: boolean
+}
+
+export interface WorkSettings {
+  lunch: WorkReminderSettings
+  offWork: WorkReminderSettings
+}
 
 export interface TodoTask {
   id: number
