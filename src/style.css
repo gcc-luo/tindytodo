@@ -69,6 +69,13 @@ button:disabled { opacity: .45; cursor: default; }
 .new-list-form { display: flex; align-items: center; gap: 2px; padding: 4px 0; }
 .new-list-form input { width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid var(--line-strong); border-radius: 5px; background: white; font-size: 12px; }
 .sidebar-bottom { margin-top: auto; padding: 15px 7px 0; }
+.work-settings-entry { display: flex; width: 100%; align-items: center; gap: 8px; margin-bottom: 10px; padding: 9px 9px; border: 1px solid #dfeade; border-radius: 8px; background: #f7fbf6; color: #52745b; cursor: pointer; text-align: left; transition: border-color .14s ease, background .14s ease, transform .14s ease; }
+.work-settings-entry:hover { border-color: #b9d0bb; background: #f0f7ef; transform: translateY(-1px); }
+.work-settings-entry-icon { display: grid; width: 25px; height: 25px; flex: 0 0 25px; place-items: center; border-radius: 7px; background: #e2efe2; color: #5a8965; }
+.work-settings-entry > span:nth-child(2) { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; }
+.work-settings-entry strong { color: #4f6f56; font-size: 11px; font-weight: 650; }
+.work-settings-entry small { color: #97aa99; font-size: 9px; }
+.work-settings-entry > svg { color: #9cb29e; }
 .shortcut-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 9px 9px; border: 1px solid #e9ede6; border-radius: 7px; color: #879187; font-size: 10px; }
 .shortcut-hint svg { margin-right: 2px; color: #8caa94; }
 .shortcut-hint span { margin-right: auto; }
@@ -91,7 +98,9 @@ kbd { min-width: 19px; padding: 2px 4px; border: 1px solid #e7ebe4; border-radiu
 .icon-button:hover { background: #f1f4ef; color: #4d6252; }
 .search-trigger, .help-button { width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: #858d83; cursor: pointer; }
 .search-trigger:hover, .help-button:hover { background: #f1f4ef; color: #4d6252; }
-.help-button { display: grid; place-items: center; }
+.settings-trigger { display: inline-flex; height: 30px; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #758276; cursor: pointer; font: inherit; font-size: 11px; }
+.settings-trigger:hover { border-color: #dfe8df; background: #f1f4ef; color: #4d6252; }
+.settings-trigger svg { stroke-width: 1.8; }
 .avatar { display: grid; width: 27px; height: 27px; place-items: center; border: 1px solid #dfe8df; border-radius: 50%; background: #edf4ed; color: #60816a; font: 700 11px 'Segoe UI', sans-serif; }
 .search-field { display: flex; width: 250px; align-items: center; gap: 7px; padding: 0 7px 0 10px; border: 1px solid #dfe8df; border-radius: 6px; color: #899288; }
 .search-field input { width: 100%; height: 30px; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 12px; }

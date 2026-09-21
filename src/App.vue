@@ -468,6 +468,11 @@ onBeforeUnmount(() => {
       </nav>
 
       <div class="sidebar-bottom">
+        <button class="work-settings-entry" type="button" @click="openSettings">
+          <span class="work-settings-entry-icon"><Clock3 :size="15" /></span>
+          <span><strong>设置工作时间</strong><small>午休 / 下班提醒</small></span>
+          <ChevronRight :size="14" />
+        </button>
         <div class="shortcut-hint" :title="shortcutRegistered ? `快速记录：${shortcutLabel}` : '快捷键都被占用；仍可在主窗口快速添加'">
           <Sparkles :size="14" /><span>快速记录</span>
           <template v-if="shortcutRegistered"><kbd v-for="part in shortcutLabel.split(' + ')" :key="part">{{ part }}</kbd></template>
@@ -487,7 +492,7 @@ onBeforeUnmount(() => {
             <button class="icon-button" type="button" aria-label="关闭搜索" @click="closeSearch"><X :size="15" /></button>
           </label>
           <button v-else class="icon-button search-trigger" type="button" aria-label="搜索任务" title="搜索任务" @click="beginSearch"><Search :size="17" /></button>
-          <button class="help-button" type="button" title="设置" aria-label="设置" @click="openSettings"><Settings2 :size="16" /></button>
+          <button class="settings-trigger" type="button" title="设置工作时间和应用选项" aria-label="设置" @click="openSettings"><Settings2 :size="16" /><span>设置</span></button>
           <div class="avatar">T</div>
         </div>
       </header>
