@@ -173,9 +173,13 @@ async function saveSettings(): Promise<void> {
 async function setCelebrationWindow(fullscreen: boolean): Promise<void> {
   if (!nativeApp || isQuickAdd) return
   const window = getCurrentWindow()
+  if (fullscreen) {
+    await window.unminimize()
+    await window.show()
+  }
   await window.setFullscreen(fullscreen)
   await window.setAlwaysOnTop(fullscreen)
-  if (!fullscreen) await window.setFocus()
+  await window.setFocus()
 }
 
 async function showCelebration(kind: ReminderKind): Promise<void> {
