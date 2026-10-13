@@ -131,6 +131,14 @@ function defaultWorkListId(data: AppData = appData.value): string {
   return workList ? String(workList.id) : ''
 }
 
+function defaultAddListId(view: AppView = activeView.value, data: AppData = appData.value): string {
+  if (view.startsWith('list:')) {
+    const listId = view.slice(5)
+    if (data.lists.some((list) => String(list.id) === listId)) return listId
+  }
+  return defaultWorkListId(data)
+}
+
 function flash(message: string): void {
   toast.value = message
   if (toastTimer) clearTimeout(toastTimer)
@@ -141,7 +149,7 @@ async function loadData(): Promise<void> {
   try {
     appData.value = await getAppData()
     if (!addListId.value || !appData.value.lists.some((list) => String(list.id) === addListId.value)) {
-      addListId.value = defaultWorkListId(appData.value)
+      addListId.value = defaultAddListId(activeView.value, appData.value)
     }
     workSettings.value = await getWorkSettings()
     workReports.value = await getWorkReports()
@@ -367,7 +375,7 @@ async function addTask(): Promise<void> {
     title: addTitle.value.trim(),
     due_date: addDate.value || (activeView.value === 'today' ? today.value : null),
     due_time: (addDate.value || activeView.value === 'today') ? (addTime.value || null) : null,
-    list_id: addListId.value ? Number(addListId.value) : (activeList.value?.id ?? null),
+    list_id: addListId.value ? Number(addListId.value) : null,
     priority: addPriority.value ? 1 : 0,
   }
   try {
@@ -375,7 +383,7 @@ async function addTask(): Promise<void> {
     addTitle.value = ''
     addDate.value = today.value
     addTime.value = '18:00'
-    addListId.value = defaultWorkListId()
+    addListId.value = defaultAddListId()
     addPriority.value = false
     addOptionsOpen.value = false
     await loadData()
@@ -440,6 +448,7 @@ async function addList(): Promise<void> {
     newListName.value = ''
     newListOpen.value = false
     activeView.value = `list:${list.id}`
+    addListId.value = String(list.id)
   } catch (error) {
     flash(error instanceof Error ? error.message : String(error))
   }
@@ -467,7 +476,10 @@ async function manageList(list: TodoList, action: 'rename' | 'delete'): Promise<
     await deleteList(list.id)
     appData.value.lists = appData.value.lists.filter((item) => item.id !== list.id)
     appData.value.tasks = appData.value.tasks.map((task) => task.list_id === list.id ? { ...task, list_id: null } : task)
-    if (activeView.value === `list:${list.id}`) activeView.value = 'inbox'
+    if (activeView.value === `list:${list.id}`) {
+      activeView.value = 'inbox'
+      addListId.value = defaultWorkListId()
+    }
     flash('清单已删除，任务仍然保留')
   } catch (error) {
     flash(error instanceof Error ? error.message : String(error))
@@ -476,6 +488,7 @@ async function manageList(list: TodoList, action: 'rename' | 'delete'): Promise<
 
 function selectView(view: AppView): void {
   activeView.value = view
+  addListId.value = defaultAddListId(view)
   selectedId.value = null
   searchQuery.value = ''
   listMenuId.value = null

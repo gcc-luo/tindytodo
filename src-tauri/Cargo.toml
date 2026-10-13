@@ -1,6 +1,6 @@
 [package]
 name = "tinytodo"
-version = "0.0.5"
+version = "0.0.6"
 description = "A quiet desktop todo list"
 authors = ["TinyTodo"]
 edition = "2021"
