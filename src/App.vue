@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { check } from '@tauri-apps/plugin-updater'
+import { check, type DownloadEvent } from '@tauri-apps/plugin-updater'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   Archive, CalendarDays, Check, CheckCheck, ChevronRight, Clock3,
@@ -34,6 +34,7 @@ const shortcutRegistered = ref(true)
 const settingsOpen = ref(false)
 const updateStatus = ref('')
 const checkingForUpdates = ref(false)
+const updateProgress = ref<number | null>(null)
 const workSettings = ref<WorkSettings>(defaultWorkSettings())
 const settingsDraft = ref<WorkSettings>(defaultWorkSettings())
 const workReports = ref<WorkReports>(defaultWorkReports())
@@ -44,8 +45,8 @@ const reminderNow = ref(new Date())
 const celebration = ref<ReminderKind | null>(null)
 const addTitle = ref('')
 const addOptionsOpen = ref(false)
-const addDate = ref('')
-const addTime = ref('')
+const addDate = ref(localDateKey())
+const addTime = ref('18:00')
 const addListId = ref('')
 const addPriority = ref(false)
 const addInput = ref<HTMLInputElement | null>(null)
@@ -364,8 +365,8 @@ async function addTask(): Promise<void> {
   try {
     await createTask(draft)
     addTitle.value = ''
-    addDate.value = ''
-    addTime.value = ''
+    addDate.value = today.value
+    addTime.value = '18:00'
     addListId.value = ''
     addPriority.value = false
     addOptionsOpen.value = false
@@ -496,6 +497,7 @@ async function changeShortcut(label: string): Promise<void> {
 async function checkForUpdates(): Promise<void> {
   if (checkingForUpdates.value) return
   checkingForUpdates.value = true
+  updateProgress.value = null
   updateStatus.value = '正在检查更新…'
   try {
     const update = await check()
@@ -503,10 +505,25 @@ async function checkForUpdates(): Promise<void> {
       updateStatus.value = '当前已是最新版本'
       return
     }
-    updateStatus.value = `发现新版本 ${update.version}，正在下载并安装…`
-    await update.downloadAndInstall()
+    let downloadedBytes = 0
+    let totalBytes = 0
+    updateStatus.value = `发现新版本 ${update.version}，准备下载…`
+    await update.downloadAndInstall((event: DownloadEvent) => {
+      if (event.event === 'Started') {
+        totalBytes = event.data.contentLength ?? 0
+        updateProgress.value = 0
+        updateStatus.value = totalBytes > 0 ? `正在下载新版本 ${update.version}…` : `正在下载新版本 ${update.version}（大小未知）…`
+      } else if (event.event === 'Progress') {
+        downloadedBytes += event.data.chunkLength
+        if (totalBytes > 0) updateProgress.value = Math.min(99, Math.round((downloadedBytes / totalBytes) * 100))
+      } else {
+        updateProgress.value = 100
+        updateStatus.value = '下载完成，正在安装…'
+      }
+    })
     updateStatus.value = '更新已安装，应用即将重新启动'
   } catch (error) {
+    updateProgress.value = null
     updateStatus.value = `检查更新失败：${error instanceof Error ? error.message : String(error)}`
   } finally {
     checkingForUpdates.value = false
@@ -740,9 +757,13 @@ onBeforeUnmount(() => {
             <strong>软件更新</strong>
             <span v-if="updateStatus" role="status">{{ updateStatus }}</span>
             <span v-else>从 GitHub 检查 Windows 版本更新</span>
+              <div v-if="updateProgress !== null" class="update-progress" role="progressbar" :aria-valuenow="updateProgress" aria-valuemin="0" aria-valuemax="100">
+                <div class="update-progress-meta"><span>下载进度</span><b>{{ updateProgress }}%</b></div>
+                <div class="update-progress-track"><i :style="{ width: `${updateProgress}%` }"></i></div>
+              </div>
           </div>
           <button class="update-button" type="button" :disabled="checkingForUpdates" @click="checkForUpdates">
-            {{ checkingForUpdates ? '检查中…' : '检查更新' }}
+            {{ checkingForUpdates ? (updateProgress === null ? '检查中…' : '下载中…') : '检查更新' }}
           </button>
         </div>
         <div class="modal-actions"><button class="text-button" type="button" @click="settingsOpen = false">取消</button><button class="modal-primary" type="button" @click="saveSettings">保存设置</button></div>

@@ -6,7 +6,7 @@ import { createTask, getShortcutInfo, hideQuickAdd } from '../api'
 import { localDateKey } from '../lib/taskFilters'
 
 const title = ref('')
-const dueDate = ref('')
+const dueDate = ref(localDateKey())
 const input = ref<HTMLInputElement | null>(null)
 const error = ref('')
 const shortcutLabel = ref('Ctrl + Alt + Space')
@@ -24,9 +24,9 @@ async function save(): Promise<void> {
     return
   }
   try {
-    await createTask({ title: title.value.trim(), due_date: dueDate.value || null })
+    await createTask({ title: title.value.trim(), due_date: dueDate.value || localDateKey(), due_time: '18:00' })
     title.value = ''
-    dueDate.value = ''
+    dueDate.value = localDateKey()
     error.value = ''
     await hideQuickAdd()
   } catch (reason) {
