@@ -1,9 +1,10 @@
 import { emit, listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
-import type { AppData, TaskDraft, TaskChanges, TodoList, TodoTask, WorkSettings } from './types'
+import type { AppData, TaskDraft, TaskChanges, TodoList, TodoTask, WorkReports, WorkSettings } from './types'
 
 const STORAGE_KEY = 'tinytodo-local-v1'
 const WORK_SETTINGS_KEY = 'tinytodo-work-settings-v1'
+const WORK_REPORTS_KEY = 'tinytodo-work-reports-v1'
 const nativeApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
 export interface ShortcutInfo {
@@ -38,6 +39,37 @@ export async function getWorkSettings(): Promise<WorkSettings> {
 export async function saveWorkSettings(settings: WorkSettings): Promise<void> {
   if (nativeApp) await invoke('save_work_settings', { settings })
   else localStorage.setItem(WORK_SETTINGS_KEY, JSON.stringify(settings))
+}
+
+export const defaultWorkReports = (): WorkReports => ({ entries: [] })
+
+function readWorkReports(): WorkReports {
+  const saved = localStorage.getItem(WORK_REPORTS_KEY)
+  if (!saved) return defaultWorkReports()
+  try {
+    const parsed = JSON.parse(saved) as Partial<WorkReports>
+    const entries = Array.isArray(parsed.entries) ? parsed.entries : []
+    return {
+      entries: entries
+        .filter((entry): entry is WorkReports['entries'][number] => Boolean(entry && typeof entry === 'object'))
+        .map((entry) => ({
+          ...entry,
+          progress: Math.max(0, Math.min(100, Math.round(Number(entry.progress) || 0))),
+          task_id: entry.task_id == null ? null : Number(entry.task_id),
+        })),
+    }
+  } catch {
+    return defaultWorkReports()
+  }
+}
+
+export async function getWorkReports(): Promise<WorkReports> {
+  return nativeApp ? invoke<WorkReports>('get_work_reports') : readWorkReports()
+}
+
+export async function saveWorkReports(reports: WorkReports): Promise<void> {
+  if (nativeApp) await invoke('save_work_reports', { reports })
+  else localStorage.setItem(WORK_REPORTS_KEY, JSON.stringify(reports))
 }
 
 function readLocalData(): AppData {

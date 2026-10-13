@@ -15,6 +15,20 @@ export interface WorkSettings {
   offWork: WorkReminderSettings
 }
 
+export interface WorkReportEntry {
+  id: string
+  date: string
+  content: string
+  progress: number
+  task_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface WorkReports {
+  entries: WorkReportEntry[]
+}
+
 export interface TodoTask {
   id: number
   title: string

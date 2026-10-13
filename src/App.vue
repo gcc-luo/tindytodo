@@ -4,24 +4,27 @@ import { check } from '@tauri-apps/plugin-updater'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   Archive, CalendarDays, Check, CheckCheck, ChevronRight, Clock3,
-  Inbox, ListPlus, MoreHorizontal, Plus, Search, Settings2, Sparkles, Sun, X,
+  FileText, Inbox, ListPlus, MoreHorizontal, Plus, Search, Settings2, Sparkles, Sun, X,
 } from 'lucide-vue-next'
 import TaskDetails from './components/TaskDetails.vue'
 import TaskRow from './components/TaskRow.vue'
+import ReportsPage from './components/ReportsPage.vue'
 import QuickAddWindow from './components/QuickAddWindow.vue'
 import {
-  createList, createTask, deleteList, deleteTask, getAppData, getShortcutInfo, reorderTasks, setShortcut,
-  renameList, subscribeToChanges, toggleTask, updateTask, defaultWorkSettings, getWorkSettings, saveWorkSettings,
+  createList, createTask, deleteList, deleteTask, getAppData, getShortcutInfo, getWorkReports, reorderTasks, saveWorkReports, setShortcut,
+  renameList, subscribeToChanges, toggleTask, updateTask, defaultWorkReports, defaultWorkSettings, getWorkSettings, saveWorkSettings,
 } from './api'
 import { countTasks, filterTasks, localDateKey } from './lib/taskFilters'
 import { crossedOccurrence, formatCountdown, nextReminder, type ReminderKind } from './lib/workReminders'
-import type { AppData, TaskDraft, TaskView, TodoList, TaskChanges, WorkSettings } from './types'
+import type { AppData, TaskDraft, TaskView, TodoList, TaskChanges, TodoTask, WorkReportEntry, WorkReports, WorkSettings } from './types'
+
+type AppView = TaskView | 'reports'
 
 const isQuickAdd = new URLSearchParams(window.location.search).has('quickAdd')
 const nativeApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 const appData = ref<AppData>({ tasks: [], lists: [] })
 const loading = ref(true)
-const activeView = ref<TaskView>('today')
+const activeView = ref<AppView>('today')
 const selectedId = ref<number | null>(null)
 const searchOpen = ref(false)
 const searchQuery = ref('')
@@ -33,6 +36,10 @@ const updateStatus = ref('')
 const checkingForUpdates = ref(false)
 const workSettings = ref<WorkSettings>(defaultWorkSettings())
 const settingsDraft = ref<WorkSettings>(defaultWorkSettings())
+const workReports = ref<WorkReports>(defaultWorkReports())
+const reportSyncTask = ref<TodoTask | null>(null)
+const reportSyncProgress = ref(0)
+const reportSyncOpen = ref(false)
 const reminderNow = ref(new Date())
 const celebration = ref<ReminderKind | null>(null)
 const addTitle = ref('')
@@ -56,7 +63,7 @@ let reminderTickBusy = false
 const triggeredReminders = new Set<string>()
 
 const today = ref(localDateKey())
-const visibleTasks = computed(() => filterTasks(
+const visibleTasks = computed(() => activeView.value === 'reports' ? [] : filterTasks(
   appData.value.tasks,
   activeView.value,
   today.value,
@@ -70,6 +77,7 @@ const activeList = computed(() => activeView.value.startsWith('list:')
   : null)
 const viewTitle = computed(() => {
   if (searchQuery.value.trim()) return '搜索结果'
+  if (activeView.value === 'reports') return '日报 / 周报'
   if (activeView.value === 'today') return '今天'
   if (activeView.value === 'inbox') return '收集箱'
   if (activeView.value === 'planned') return '计划'
@@ -78,6 +86,7 @@ const viewTitle = computed(() => {
 })
 const viewSubtitle = computed(() => {
   if (searchQuery.value.trim()) return `在所有任务中搜索“${searchQuery.value.trim()}”`
+  if (activeView.value === 'reports') return '日报逐条记录，周报自动汇总本周日报'
   if (activeView.value === 'today') return dateLabel(new Date())
   if (activeView.value === 'inbox') return '还没有安排日期的任务'
   if (activeView.value === 'planned') return '为接下来留一点计划'
@@ -102,6 +111,16 @@ function listCount(list: TodoList): number {
   return appData.value.tasks.filter((task) => task.status === 0 && task.list_id === list.id).length
 }
 
+function reportForTask(task: TodoTask): WorkReportEntry | undefined {
+  return workReports.value.entries
+    .filter((entry) => entry.task_id === task.id && entry.date === today.value)
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0]
+}
+
+function isWorkTask(task: TodoTask): boolean {
+  return appData.value.lists.find((list) => list.id === task.list_id)?.name === '工作'
+}
+
 function getListName(id: number | null): string | undefined {
   return appData.value.lists.find((list) => list.id === id)?.name
 }
@@ -116,6 +135,7 @@ async function loadData(): Promise<void> {
   try {
     appData.value = await getAppData()
     workSettings.value = await getWorkSettings()
+    workReports.value = await getWorkReports()
     const shortcut = await getShortcutInfo()
     shortcutLabel.value = shortcut.label
     shortcutRegistered.value = shortcut.registered
@@ -168,6 +188,90 @@ async function saveSettings(): Promise<void> {
   } catch (error) {
     flash(error instanceof Error ? error.message : String(error))
   }
+}
+
+function createReportId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+async function persistReports(entries: WorkReportEntry[]): Promise<void> {
+  const next = { entries }
+  await saveWorkReports(next)
+  workReports.value = next
+}
+
+async function saveDailyReport(content: string, progress: number, date: string): Promise<void> {
+  const now = new Date().toISOString()
+  const entry: WorkReportEntry = {
+    id: createReportId(), date, content: content.trim(), progress: Math.max(0, Math.min(100, Math.round(progress))),
+    task_id: null, created_at: now, updated_at: now,
+  }
+  try {
+    await persistReports([entry, ...workReports.value.entries])
+    flash('日报已保存')
+  } catch (error) {
+    flash(error instanceof Error ? error.message : String(error))
+  }
+}
+
+async function updateReportProgress(id: string, progress: number): Promise<void> {
+  const nextProgress = Math.max(0, Math.min(100, Math.round(progress)))
+  const entries = workReports.value.entries.map((entry) => entry.id === id
+    ? { ...entry, progress: nextProgress, updated_at: new Date().toISOString() }
+    : entry)
+  try {
+    await persistReports(entries)
+    flash('日报进度已更新')
+  } catch (error) {
+    flash(error instanceof Error ? error.message : String(error))
+  }
+}
+
+function requestTaskReportSync(id: number): void {
+  const task = appData.value.tasks.find((item) => item.id === id)
+  if (!task) return
+  if (!isWorkTask(task)) {
+    flash('生活和其他清单任务不会同步到工作日报')
+    return
+  }
+  if (reportForTask(task)) {
+    flash('这条任务今天已经同步到日报')
+    return
+  }
+  if (task.status === 1) {
+    void saveTaskReport(task, 100)
+    return
+  }
+  reportSyncTask.value = task
+  reportSyncProgress.value = 0
+  reportSyncOpen.value = true
+}
+
+async function saveTaskReport(task: TodoTask, progress: number): Promise<void> {
+  const now = new Date().toISOString()
+  const entry: WorkReportEntry = {
+    id: createReportId(), date: today.value, content: task.title, progress: Math.max(0, Math.min(100, Math.round(progress))),
+    task_id: task.id, created_at: now, updated_at: now,
+  }
+  try {
+    await persistReports([entry, ...workReports.value.entries])
+    reportSyncOpen.value = false
+    reportSyncTask.value = null
+    flash(entry.progress === 100 ? '已同步到日报，进度自动记为 100%' : '已同步到日报')
+  } catch (error) {
+    flash(error instanceof Error ? error.message : String(error))
+  }
+}
+
+function confirmTaskReportSync(): void {
+  if (!reportSyncTask.value) return
+  void saveTaskReport(reportSyncTask.value, reportSyncProgress.value)
+}
+
+function cancelTaskReportSync(): void {
+  reportSyncOpen.value = false
+  reportSyncTask.value = null
 }
 
 async function setCelebrationWindow(fullscreen: boolean): Promise<void> {
@@ -361,7 +465,7 @@ async function manageList(list: TodoList, action: 'rename' | 'delete'): Promise<
   }
 }
 
-function selectView(view: TaskView): void {
+function selectView(view: AppView): void {
   activeView.value = view
   selectedId.value = null
   searchQuery.value = ''
@@ -471,6 +575,10 @@ onBeforeUnmount(() => {
         </form>
       </nav>
 
+      <button class="reports-nav-item" :class="{ active: activeView === 'reports' }" type="button" @click="selectView('reports')">
+        <FileText :size="16" /><span>日报 / 周报</span>
+      </button>
+
       <div class="sidebar-bottom">
         <button class="work-settings-entry" type="button" @click="openSettings">
           <span class="work-settings-entry-icon"><Clock3 :size="15" /></span>
@@ -508,7 +616,15 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="content-scroll">
-        <section class="task-page">
+        <ReportsPage
+          v-if="activeView === 'reports'"
+          :entries="workReports.entries"
+          :today="today"
+          @save="saveDailyReport"
+          @update-progress="updateReportProgress"
+          @notify="flash"
+        />
+        <section v-else class="task-page">
           <div class="page-heading">
             <div>
               <p class="eyebrow">{{ activeView === 'today' && !searchQuery ? '保持轻盈，一次专注一件事' : 'TinyTodo · 本地清单' }}</p>
@@ -547,12 +663,16 @@ onBeforeUnmount(() => {
               :list-name="activeView === 'completed' ? getListName(task.list_id) : undefined"
               :dragging="draggingId === task.id"
               :drop-target="dragTargetId === task.id"
+              :report-sync-visible="!searchQuery && (activeView === 'today' || activeView === 'completed')"
+              :report-eligible="isWorkTask(task)"
+              :report-entry="reportForTask(task)"
               @toggle="completeTask"
               @select="selectedId = selectedId === $event ? null : $event"
               @drag-start="draggingId = $event"
               @drag-over="dragTargetId = $event"
               @drop="moveTask($event)"
               @drag-end="draggingId = null; dragTargetId = null"
+              @sync-report="requestTaskReportSync"
             />
           </div>
           <div v-else-if="!loading" class="empty-state">
@@ -627,6 +747,17 @@ onBeforeUnmount(() => {
         </div>
         <div class="modal-actions"><button class="text-button" type="button" @click="settingsOpen = false">取消</button><button class="modal-primary" type="button" @click="saveSettings">保存设置</button></div>
       </section>
+    </div>
+    <div v-if="reportSyncOpen && reportSyncTask" class="modal-backdrop" @click.self="cancelTaskReportSync">
+      <form class="new-list-modal report-sync-modal" @submit.prevent="confirmTaskReportSync">
+        <div class="modal-icon"><FileText :size="18" /></div>
+        <h2>同步到工作日报</h2>
+        <p>{{ reportSyncTask.title }}</p>
+        <label class="settings-label" for="report-sync-progress">当前进度</label>
+        <div class="report-sync-input"><input id="report-sync-progress" v-model.number="reportSyncProgress" type="number" min="0" max="99" step="1" autofocus /><span>%</span></div>
+        <p class="settings-note">任务尚未完成，请填写当前进度。完成任务会自动记录为 100%。</p>
+        <div class="modal-actions"><button class="text-button" type="button" @click="cancelTaskReportSync">取消</button><button class="modal-primary" type="submit">同步日报</button></div>
+      </form>
     </div>
     <div v-if="celebration" class="celebration-screen" role="dialog" aria-modal="true" @click="dismissCelebration">
       <div class="celebration-confetti" aria-hidden="true"><span v-for="n in 34" :key="n" :style="{ '--i': n }"></span></div>

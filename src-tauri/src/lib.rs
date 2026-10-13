@@ -51,6 +51,16 @@ fn save_work_settings(db: State<'_, TodoDb>, settings: db::WorkSettings) -> Resu
 }
 
 #[tauri::command]
+fn get_work_reports(db: State<'_, TodoDb>) -> Result<db::WorkReports, String> {
+    db.work_reports()
+}
+
+#[tauri::command]
+fn save_work_reports(db: State<'_, TodoDb>, reports: db::WorkReports) -> Result<(), String> {
+    db.save_work_reports(reports)
+}
+
+#[tauri::command]
 fn create_task(db: State<'_, TodoDb>, draft: TaskDraft) -> Result<db::TodoTask, String> {
     db.create_task(draft)
 }
@@ -253,6 +263,8 @@ pub fn run() {
             get_app_data,
             get_work_settings,
             save_work_settings,
+            get_work_reports,
+            save_work_reports,
             create_task,
             update_task,
             toggle_task,
