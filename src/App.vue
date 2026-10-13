@@ -126,6 +126,11 @@ function getListName(id: number | null): string | undefined {
   return appData.value.lists.find((list) => list.id === id)?.name
 }
 
+function defaultWorkListId(data: AppData = appData.value): string {
+  const workList = data.lists.find((list) => list.name === '工作')
+  return workList ? String(workList.id) : ''
+}
+
 function flash(message: string): void {
   toast.value = message
   if (toastTimer) clearTimeout(toastTimer)
@@ -135,6 +140,9 @@ function flash(message: string): void {
 async function loadData(): Promise<void> {
   try {
     appData.value = await getAppData()
+    if (!addListId.value || !appData.value.lists.some((list) => String(list.id) === addListId.value)) {
+      addListId.value = defaultWorkListId(appData.value)
+    }
     workSettings.value = await getWorkSettings()
     workReports.value = await getWorkReports()
     const shortcut = await getShortcutInfo()
@@ -367,7 +375,7 @@ async function addTask(): Promise<void> {
     addTitle.value = ''
     addDate.value = today.value
     addTime.value = '18:00'
-    addListId.value = ''
+    addListId.value = defaultWorkListId()
     addPriority.value = false
     addOptionsOpen.value = false
     await loadData()

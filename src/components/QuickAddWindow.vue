@@ -2,11 +2,12 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { CalendarDays, CornerDownLeft, X } from 'lucide-vue-next'
 import { listen } from '@tauri-apps/api/event'
-import { createTask, getShortcutInfo, hideQuickAdd } from '../api'
+import { createTask, getAppData, getShortcutInfo, hideQuickAdd } from '../api'
 import { localDateKey } from '../lib/taskFilters'
 
 const title = ref('')
 const dueDate = ref(localDateKey())
+const workListId = ref<number | null>(null)
 const input = ref<HTMLInputElement | null>(null)
 const error = ref('')
 const shortcutLabel = ref('Ctrl + Alt + Space')
@@ -24,7 +25,7 @@ async function save(): Promise<void> {
     return
   }
   try {
-    await createTask({ title: title.value.trim(), due_date: dueDate.value || localDateKey(), due_time: '18:00' })
+    await createTask({ title: title.value.trim(), due_date: dueDate.value || localDateKey(), due_time: '18:00', list_id: workListId.value })
     title.value = ''
     dueDate.value = localDateKey()
     error.value = ''
@@ -51,6 +52,12 @@ function onKeydown(event: KeyboardEvent): void {
 
 onMounted(async () => {
   await focusInput()
+  try {
+    const data = await getAppData()
+    workListId.value = data.lists.find((list) => list.name === '工作')?.id ?? null
+  } catch {
+    // The quick window remains usable if the local data bridge is unavailable.
+  }
   try {
     shortcutLabel.value = (await getShortcutInfo()).label
   } catch {
