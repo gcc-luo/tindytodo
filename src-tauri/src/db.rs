@@ -64,22 +64,6 @@ pub struct WorkSettings {
     pub off_work: WorkReminderSettings,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkReportEntry {
-    pub id: String,
-    pub date: String,
-    pub content: String,
-    pub progress: i64,
-    pub task_id: Option<i64>,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkReports {
-    pub entries: Vec<WorkReportEntry>,
-}
-
 pub struct TodoDb {
     connection: Mutex<Connection>,
 }
@@ -181,41 +165,6 @@ impl TodoDb {
         connection
             .execute(
                 "INSERT INTO app_meta (key, value) VALUES ('work_reminders_v1', ?1)
-                 ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                [&value],
-            )
-            .map_err(db_error)?;
-        Ok(())
-    }
-
-    pub fn work_reports(&self) -> Result<WorkReports, String> {
-        let connection = self
-            .connection
-            .lock()
-            .map_err(|_| "数据库暂时不可用".to_string())?;
-        let stored: Option<String> = connection
-            .query_row(
-                "SELECT value FROM app_meta WHERE key='work_reports_v1'",
-                [],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(db_error)?;
-        stored
-            .map(|value| serde_json::from_str(&value).map_err(|_| "日报数据已损坏，已恢复为空".to_string()))
-            .unwrap_or_else(|| Ok(WorkReports { entries: Vec::new() }))
-    }
-
-    pub fn save_work_reports(&self, reports: WorkReports) -> Result<(), String> {
-        validate_work_reports(&reports)?;
-        let value = serde_json::to_string(&reports).map_err(|error| error.to_string())?;
-        let connection = self
-            .connection
-            .lock()
-            .map_err(|_| "数据库暂时不可用".to_string())?;
-        connection
-            .execute(
-                "INSERT INTO app_meta (key, value) VALUES ('work_reports_v1', ?1)
                  ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                 [&value],
             )
@@ -399,27 +348,6 @@ fn validate_work_settings(settings: &WorkSettings) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_work_reports(reports: &WorkReports) -> Result<(), String> {
-    for entry in &reports.entries {
-        if entry.id.trim().is_empty() {
-            return Err("日报记录缺少标识".to_string());
-        }
-        if entry.date.len() != 10 {
-            return Err("日报日期格式无效".to_string());
-        }
-        if entry.content.trim().is_empty() || entry.content.chars().count() > 300 {
-            return Err("日报内容不能为空且不能超过 300 个字".to_string());
-        }
-        if !(0..=100).contains(&entry.progress) {
-            return Err("日报进度必须在 0 到 100 之间".to_string());
-        }
-        if entry.created_at.trim().is_empty() || entry.updated_at.trim().is_empty() {
-            return Err("日报时间不能为空".to_string());
-        }
-    }
-    Ok(())
-}
-
 fn task_from_row(row: &Row<'_>) -> rusqlite::Result<TodoTask> {
     Ok(TodoTask {
         id: row.get("id")?,
@@ -532,7 +460,7 @@ fn db_error(error: rusqlite::Error) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{TaskDraft, TodoDb, WorkReportEntry, WorkReports};
+    use super::{TaskDraft, TodoDb};
     use rusqlite::Connection;
     use std::sync::Mutex;
 
@@ -650,27 +578,4 @@ mod tests {
         assert_eq!(db.work_settings().unwrap().off_work.date, settings.off_work.date);
     }
 
-    #[test]
-    fn work_reports_round_trip_and_validate_progress() {
-        let folder = tempfile::tempdir().unwrap();
-        let db = TodoDb::open(&folder.path().join("tinytodo.sqlite3")).unwrap();
-        let reports = WorkReports {
-            entries: vec![WorkReportEntry {
-                id: "report-1".into(),
-                date: "2026-10-13".into(),
-                content: "完成日报模块".into(),
-                progress: 72,
-                task_id: Some(4),
-                created_at: "2026-10-13T09:00:00Z".into(),
-                updated_at: "2026-10-13T09:00:00Z".into(),
-            }],
-        };
-        db.save_work_reports(reports.clone()).unwrap();
-        assert_eq!(db.work_reports().unwrap().entries[0].progress, 72);
-
-        let invalid = WorkReports {
-            entries: vec![WorkReportEntry { progress: 101, ..reports.entries[0].clone() }],
-        };
-        assert!(db.save_work_reports(invalid).is_err());
-    }
 }

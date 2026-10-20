@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { CalendarDays, Clock3, GripVertical, Star } from 'lucide-vue-next'
-import type { TodoTask, WorkReportEntry } from '../types'
+import { CalendarDays, Clock3, Copy, GripVertical, Star } from 'lucide-vue-next'
+import type { TodoTask } from '../types'
 import { localDateKey } from '../lib/taskFilters'
 
 const props = defineProps<{
@@ -9,9 +9,6 @@ const props = defineProps<{
   listName?: string
   dragging: boolean
   dropTarget: boolean
-  reportSyncVisible?: boolean
-  reportEligible?: boolean
-  reportEntry?: WorkReportEntry
 }>()
 const today = localDateKey()
 
@@ -22,7 +19,7 @@ const emit = defineEmits<{
   dragOver: [id: number]
   drop: [id: number]
   dragEnd: []
-  syncReport: [id: number]
+  copy: []
 }>()
 
 function dateLabel(value: string): string {
@@ -84,14 +81,13 @@ function startDrag(event: DragEvent): void {
       </div>
     </div>
     <button
-      v-if="reportSyncVisible"
-      class="report-task-button"
-      :class="{ synced: reportEntry, excluded: !reportEligible }"
+      class="task-copy-button icon-button"
       type="button"
-      :disabled="!reportEligible"
-      @click.stop="emit('syncReport', task.id)"
+      title="复制任务"
+      aria-label="复制任务"
+      @click.stop="emit('copy')"
     >
-      {{ reportEntry ? `已同步 · ${reportEntry.progress}%` : reportEligible ? '同步到日报' : '非工作任务' }}
+      <Copy :size="14" />
     </button>
   </article>
 </template>
