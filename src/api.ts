@@ -9,6 +9,7 @@ import { referencedDiaryAssetIds } from './lib/diaryEditor'
 const STORAGE_KEY = 'tinytodo-local-v1'
 const WORK_SETTINGS_KEY = 'tinytodo-work-settings-v1'
 const nativeApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+export const isNativeApp = nativeApp
 
 export interface ShortcutInfo {
   label: string

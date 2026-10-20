@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
+import { generateHTML } from '@tiptap/core'
+import StarterKit from '@tiptap/starter-kit'
+import { DiaryImage } from './diaryImageExtension'
 import { referencedDiaryAssetIds, sanitizeDiaryHtml, textFromDiaryHtml } from './diaryEditor'
 
 const first = '01234567-89ab-cdef-0123-456789abcdef'
@@ -21,5 +24,14 @@ describe('diary editor HTML helpers', () => {
     expect(html).not.toContain('javascript:')
     expect(html).not.toContain('evil.test')
     expect(html).toContain(`data-asset-id="${first}"`)
+  })
+
+  it('serializes image nodes by stable asset id without persisting a local URL', () => {
+    const html = generateHTML({
+      type: 'doc',
+      content: [{ type: 'diaryImage', attrs: { assetId: first, alt: '日记图片' } }],
+    }, [StarterKit, DiaryImage])
+    expect(html).toContain(`data-asset-id="${first}"`)
+    expect(html).not.toContain('src=')
   })
 })

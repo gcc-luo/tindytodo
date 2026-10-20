@@ -311,3 +311,58 @@ kbd { min-width: 19px; padding: 2px 4px; border: 1px solid #e7ebe4; border-radiu
   .task-page { width: calc(100% - 38px); }
   .quick-add-options { gap: 7px; padding-left: 35px; }
 }
+
+/* Diary rich-text editor */
+.diary-editor-shell { display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; background: #fff; }
+.diary-entry-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 26px clamp(24px, 5vw, 72px) 18px; border-bottom: 1px solid #edf0ea; }
+.diary-date-line { margin: 0 0 8px; color: #879087; font-size: 12px; }
+.diary-title-input { width: min(760px, 70vw); padding: 0; border: 0; outline: 0; background: transparent; color: #303a32; font-size: 26px; font-weight: 650; letter-spacing: -.5px; }
+.diary-title-input::placeholder { color: #c1c7bf; }
+.diary-entry-meta { margin: 8px 0 0; color: #a0a69e; font-size: 11px; }
+.diary-save-indicator { display: flex; align-items: center; gap: 9px; padding-top: 9px; color: #758076; font-size: 11px; white-space: nowrap; }
+.diary-save-indicator::before { width: 7px; height: 7px; border-radius: 50%; background: #93b79a; content: ''; }
+.diary-save-indicator.is-saving::before { background: #d9a64c; }
+.diary-save-indicator.is-error, .diary-save-indicator.is-error::before { color: #b65e55; }
+.diary-save-indicator.is-error::before { background: #cb7067; }
+.diary-save-indicator button { padding: 3px 8px; border: 1px solid #e9c8c4; border-radius: 5px; background: #fff8f7; color: #a94c43; cursor: pointer; font-size: 11px; }
+.diary-entry-tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 clamp(24px, 5vw, 72px) 14px; }
+.diary-tag-chip { padding: 4px 10px; border: 1px solid #dfe6dc; border-radius: 999px; background: #fff; color: #7c877b; cursor: pointer; font-size: 11px; }
+.diary-tag-chip:hover { border-color: #9db99d; color: #45694c; }
+.diary-tag-chip.active { border-color: #b4cfb5; background: #edf5eb; color: #3f704a; }
+.diary-editor-toolbar { position: sticky; z-index: 2; top: 0; display: flex; min-height: 44px; flex: 0 0 auto; align-items: center; gap: 3px; overflow-x: auto; padding: 5px clamp(16px, 3vw, 48px); border-top: 1px solid #edf0ea; border-bottom: 1px solid #e9ede7; background: #fbfcfa; scrollbar-width: thin; }
+.diary-editor-toolbar button { display: inline-grid; min-width: 30px; height: 30px; flex: 0 0 auto; place-items: center; padding: 0 7px; border: 0; border-radius: 5px; background: transparent; color: #657066; cursor: pointer; font-size: 13px; }
+.diary-editor-toolbar button:hover, .diary-editor-toolbar button.active { background: #eaf2e9; color: #356747; }
+.diary-editor-toolbar button:disabled { opacity: .35; cursor: default; }
+.diary-editor-toolbar select { height: 29px; flex: 0 0 auto; padding: 0 7px; border: 1px solid #e0e6df; border-radius: 5px; background: #fff; color: #59645b; font-size: 11px; }
+.diary-editor-toolbar select[aria-label="字体"] { width: 106px; }
+.diary-editor-toolbar select[aria-label="字号"] { width: 57px; }
+.diary-editor-toolbar select[aria-label="段落对齐"] { width: 79px; }
+.diary-toolbar-divider { width: 1px; height: 19px; flex: 0 0 1px; margin: 0 4px; background: #e3e8e2; }
+.diary-color-control { position: relative; display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: 5px; color: #4f5e51; cursor: pointer; font-size: 14px; font-weight: 700; }
+.diary-color-control:hover { background: #eaf2e9; }
+.diary-color-control input { position: absolute; right: 3px; bottom: 2px; width: 10px; height: 5px; padding: 0; border: 0; cursor: pointer; }
+.diary-emoji-picker { position: relative; flex: 0 0 auto; }
+.diary-emoji-menu { position: absolute; z-index: 5; top: 35px; right: -8px; display: grid; width: 142px; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 6px; border: 1px solid #e2e8e0; border-radius: 8px; background: #fff; box-shadow: 0 8px 24px #29372b20; }
+.diary-emoji-menu button { min-width: 29px; font-size: 17px; }
+.diary-image-file-input { display: none; }
+.diary-editor-content { min-height: 0; flex: 1; overflow: auto; padding: 28px 24px 70px; }
+.diary-editor-prosemirror { width: min(760px, 100%); min-height: 100%; margin: 0 auto; outline: none; color: #3d473f; font-size: 15px; line-height: 1.9; overflow-wrap: anywhere; }
+.diary-editor-prosemirror > p:first-child:empty::before { color: #b7beb6; content: '写下今天值得记住的事…'; pointer-events: none; }
+.diary-editor-prosemirror h1, .diary-editor-prosemirror h2, .diary-editor-prosemirror h3 { margin: 1.4em 0 .55em; color: #344439; line-height: 1.35; }
+.diary-editor-prosemirror h1 { font-size: 1.8em; }
+.diary-editor-prosemirror h2 { font-size: 1.45em; }
+.diary-editor-prosemirror h3 { font-size: 1.2em; }
+.diary-editor-prosemirror blockquote { margin: 1em 0; padding: 2px 16px; border-left: 3px solid #9db99d; color: #758076; }
+.diary-editor-prosemirror ul, .diary-editor-prosemirror ol { padding-left: 1.7em; }
+.diary-editor-prosemirror a { color: #50805b; text-decoration: underline; text-underline-offset: 2px; }
+.diary-image-node { display: table; max-width: 100%; margin: 18px auto; }
+.diary-image-node img { display: block; max-width: 100%; max-height: 600px; border-radius: 5px; object-fit: contain; }
+.diary-image-node.ProseMirror-selectednode img { outline: 3px solid #b5cfb6; outline-offset: 3px; }
+.diary-image-loading, .diary-image-error { display: inline-block; padding: 18px 24px; border: 1px dashed #d4ddd2; border-radius: 7px; color: #89948a; font-size: 12px; }
+.diary-editor-error { margin: 0; padding: 8px clamp(24px, 5vw, 72px); background: #fff7f5; color: #a94c43; font-size: 12px; }
+@media (max-width: 980px) {
+  .diary-entry-heading { padding: 18px 20px 14px; }
+  .diary-entry-tags { padding-right: 20px; padding-left: 20px; }
+  .diary-editor-toolbar { padding-right: 12px; padding-left: 12px; }
+  .diary-editor-content { padding-right: 20px; padding-left: 20px; }
+}
