@@ -18,7 +18,10 @@ import { textFromDiaryHtml } from '../lib/diaryEditor'
 import type { DiaryData, DiaryEntry } from '../types'
 
 const props = defineProps<{ data: DiaryData; initialDate: string }>()
-const emit = defineEmits<{ switchWorkspace: [workspace: 'tasks'] }>()
+const emit = defineEmits<{
+  switchWorkspace: [workspace: 'tasks']
+  dateChange: [date: string]
+}>()
 
 const entries = ref([...props.data.entries])
 const tags = ref([...props.data.tags])
@@ -114,7 +117,7 @@ async function flushBeforeNavigation(): Promise<boolean> {
 function attachAutosave(entryId: number) {
   autosave?.dispose()
   saveError.value = ''
-  saveStatus.value = 'idle'
+  saveStatus.value = 'saved'
   autosave = createDiaryAutosave(async (snapshot) => {
     const updated = await saveDiaryEntry(entryId, snapshot.title, snapshot.content_html, snapshot.tag_ids)
     entries.value = entries.value.map((entry) => entry.id === entryId ? updated : entry)
@@ -140,6 +143,7 @@ async function selectEntry(entry: DiaryEntry) {
   autosave = null
   selectedEntryId.value = entry.id
   selectedDate.value = entry.entry_date
+  emit('dateChange', entry.entry_date)
   displayMonth.value = dateFromKey(entry.entry_date)
   trashView.value = entry.deleted_at !== null
   expandDate(entry.entry_date)
@@ -160,6 +164,7 @@ async function selectDate(date: string) {
   selectedEntryId.value = null
   trashView.value = false
   selectedDate.value = date
+  emit('dateChange', date)
   displayMonth.value = dateFromKey(date)
   expandDate(date)
 }
@@ -171,6 +176,7 @@ async function createEntry() {
     entries.value = [...entries.value, entry]
     selectedEntryId.value = entry.id
     selectedDate.value = entry.entry_date
+    emit('dateChange', entry.entry_date)
     trashView.value = false
     attachAutosave(entry.id)
     expandDate(entry.entry_date)

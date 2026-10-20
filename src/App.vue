@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { check, type DownloadEvent } from '@tauri-apps/plugin-updater'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   AlertTriangle, Archive, CalendarDays, Check, CheckCheck, ChevronRight, ClipboardCopy, Clock3,
-  Inbox, ListPlus, MoreHorizontal, Plus, Search, Settings2, Sparkles, Sun, Trash2, X,
+  Inbox, ListPlus, MoreHorizontal, NotebookPen, Plus, Search, Settings2, Sparkles, Sun, Trash2, X,
 } from 'lucide-vue-next'
 import TaskDetails from './components/TaskDetails.vue'
 import TaskRow from './components/TaskRow.vue'
@@ -12,20 +12,26 @@ import QuickAddWindow from './components/QuickAddWindow.vue'
 import {
   createList, createTask, deleteList, deleteTask, getAppData, getShortcutInfo, reorderTasks, setShortcut,
   renameList, subscribeToChanges, toggleTask, updateTask, defaultWorkSettings, getWorkSettings, saveWorkSettings,
+  getDiaryData,
 } from './api'
 import { countTasks, filterTasks, localDateKey } from './lib/taskFilters'
+import { switchWorkspace as transitionWorkspace, type WorkspaceState } from './lib/diaryWorkspace'
 import { copyText } from './lib/clipboard'
 import { formatListForCopy, formatTaskForCopy } from './lib/taskCopy'
 import { crossedOccurrence, formatCountdown, nextReminder, type ReminderKind } from './lib/workReminders'
-import type { AppData, TaskDraft, TaskView, TodoList, TaskChanges, TodoTask, WorkSettings } from './types'
+import type { AppData, DiaryData, TaskDraft, TaskView, TodoList, TaskChanges, TodoTask, WorkSettings } from './types'
 
 type AppView = TaskView
+const DiaryWorkspace = defineAsyncComponent(() => import('./components/DiaryWorkspace.vue'))
 
 const isQuickAdd = new URLSearchParams(window.location.search).has('quickAdd')
 const nativeApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 const appData = ref<AppData>({ tasks: [], lists: [] })
 const loading = ref(true)
 const activeView = ref<AppView>('today')
+const workspaceState = ref<WorkspaceState>({ activeWorkspace: 'tasks', taskView: 'today', selectedDate: localDateKey() })
+const activeWorkspace = computed(() => workspaceState.value.activeWorkspace)
+const diaryData = ref<DiaryData>({ entries: [], tags: [] })
 const selectedId = ref<number | null>(null)
 const searchOpen = ref(false)
 const searchQuery = ref('')
@@ -155,6 +161,23 @@ async function loadData(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+async function setWorkspace(workspace: 'tasks' | 'diary'): Promise<void> {
+  if (workspace === workspaceState.value.activeWorkspace) return
+  if (workspace === 'diary') {
+    try {
+      diaryData.value = await getDiaryData()
+    } catch (error) {
+      flash(error instanceof Error ? error.message : '日记暂时无法打开')
+      return
+    }
+  }
+  workspaceState.value = transitionWorkspace(workspaceState.value, workspace)
+}
+
+function rememberDiaryDate(date: string): void {
+  workspaceState.value = { ...workspaceState.value, selectedDate: date }
 }
 
 function cloneWorkSettings(settings: WorkSettings): WorkSettings {
@@ -382,6 +405,7 @@ async function addList(): Promise<void> {
     newListName.value = ''
     newListOpen.value = false
     activeView.value = `list:${list.id}`
+    workspaceState.value = { ...workspaceState.value, taskView: activeView.value }
     addListId.value = String(list.id)
   } catch (error) {
     flash(error instanceof Error ? error.message : String(error))
@@ -441,6 +465,7 @@ async function confirmDeleteList(): Promise<void> {
     appData.value.tasks = appData.value.tasks.map((task) => task.list_id === list.id ? { ...task, list_id: null } : task)
     if (activeView.value === `list:${list.id}`) {
       activeView.value = 'inbox'
+      workspaceState.value = { ...workspaceState.value, taskView: 'inbox' }
       addListId.value = defaultWorkListId()
     }
     flash('清单已删除，任务仍然保留')
@@ -452,6 +477,7 @@ async function confirmDeleteList(): Promise<void> {
 
 function selectView(view: AppView): void {
   activeView.value = view
+  workspaceState.value = { ...workspaceState.value, taskView: view }
   addListId.value = defaultAddListId(view)
   selectedId.value = null
   searchQuery.value = ''
@@ -534,11 +560,23 @@ onBeforeUnmount(() => {
 
 <template>
   <QuickAddWindow v-if="isQuickAdd" />
+  <DiaryWorkspace
+    v-else-if="activeWorkspace === 'diary'"
+    :data="diaryData"
+    :initial-date="workspaceState.selectedDate"
+    @date-change="rememberDiaryDate"
+    @switch-workspace="setWorkspace"
+  />
   <div v-else class="app-shell" @click.self="listMenuId = null">
     <aside class="sidebar">
       <div class="brand-row">
         <div class="brand-mark"><Check :size="18" stroke-width="2.5" /></div>
         <div class="brand-wordmark"><strong>TinyTodo</strong><span>留一点空间给重要的事</span></div>
+      </div>
+
+      <div class="workspace-switcher" role="group" aria-label="工作区">
+        <button class="active" type="button" aria-current="page"><Check :size="14" />待办</button>
+        <button type="button" @click="setWorkspace('diary')"><NotebookPen :size="14" />日记</button>
       </div>
 
       <nav class="primary-nav" aria-label="任务视图">
