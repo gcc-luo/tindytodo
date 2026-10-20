@@ -12,10 +12,10 @@ import QuickAddWindow from './components/QuickAddWindow.vue'
 import {
   createList, createTask, deleteList, deleteTask, getAppData, getShortcutInfo, reorderTasks, setShortcut,
   renameList, subscribeToChanges, toggleTask, updateTask, defaultWorkSettings, getWorkSettings, saveWorkSettings,
-  getDiaryData,
+  getDiaryData, subscribeToQuitRequest, exitApp,
 } from './api'
 import { countTasks, filterTasks, localDateKey } from './lib/taskFilters'
-import { switchWorkspace as transitionWorkspace, type WorkspaceState } from './lib/diaryWorkspace'
+import { flushBeforeAppExit, switchWorkspace as transitionWorkspace, type WorkspaceState } from './lib/diaryWorkspace'
 import { copyText } from './lib/clipboard'
 import { formatListForCopy, formatTaskForCopy } from './lib/taskCopy'
 import { crossedOccurrence, formatCountdown, nextReminder, type ReminderKind } from './lib/workReminders'
@@ -32,6 +32,7 @@ const activeView = ref<AppView>('today')
 const workspaceState = ref<WorkspaceState>({ activeWorkspace: 'tasks', taskView: 'today', selectedDate: localDateKey() })
 const activeWorkspace = computed(() => workspaceState.value.activeWorkspace)
 const diaryData = ref<DiaryData>({ entries: [], tags: [] })
+const diaryWorkspaceRef = ref<{ flushBeforeExit: () => Promise<boolean> } | null>(null)
 const selectedId = ref<number | null>(null)
 const searchOpen = ref(false)
 const searchQuery = ref('')
@@ -63,6 +64,8 @@ const deleteListTarget = ref<TodoList | null>(null)
 const draggingId = ref<number | null>(null)
 const dragTargetId = ref<number | null>(null)
 let unlisten: (() => void) | undefined
+let unlistenQuitRequest: (() => void) | undefined
+let quitInProgress = false
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 let dayTimer: ReturnType<typeof setInterval> | undefined
 let reminderTimer: ReturnType<typeof setInterval> | undefined
@@ -174,6 +177,20 @@ async function setWorkspace(workspace: 'tasks' | 'diary'): Promise<void> {
     }
   }
   workspaceState.value = transitionWorkspace(workspaceState.value, workspace)
+}
+
+async function handleQuitRequest(): Promise<void> {
+  if (quitInProgress) return
+  quitInProgress = true
+  try {
+    await flushBeforeAppExit(
+      activeWorkspace.value,
+      () => diaryWorkspaceRef.value?.flushBeforeExit() ?? Promise.resolve(true),
+      exitApp,
+    )
+  } finally {
+    quitInProgress = false
+  }
 }
 
 function rememberDiaryDate(date: string): void {
@@ -545,12 +562,14 @@ onMounted(async () => {
   if (isQuickAdd) return
   await loadData()
   unlisten = await subscribeToChanges(() => { void loadData() })
+  unlistenQuitRequest = await subscribeToQuitRequest(() => { void handleQuitRequest() })
   dayTimer = setInterval(() => { today.value = localDateKey() }, 60_000)
   reminderTimer = setInterval(() => { void tickReminders() }, 1000)
   window.addEventListener('keydown', handleGlobalKeydown)
 })
 onBeforeUnmount(() => {
   unlisten?.()
+  unlistenQuitRequest?.()
   if (dayTimer) clearInterval(dayTimer)
   if (reminderTimer) clearInterval(reminderTimer)
   if (toastTimer) clearTimeout(toastTimer)
@@ -562,6 +581,7 @@ onBeforeUnmount(() => {
   <QuickAddWindow v-if="isQuickAdd" />
   <DiaryWorkspace
     v-else-if="activeWorkspace === 'diary'"
+    ref="diaryWorkspaceRef"
     :data="diaryData"
     :initial-date="workspaceState.selectedDate"
     @date-change="rememberDiaryDate"

@@ -334,6 +334,15 @@ export async function subscribeToQuickAdd(callback: () => void): Promise<() => v
   return listen('quick-add:show', callback)
 }
 
+export async function subscribeToQuitRequest(callback: () => void): Promise<() => void> {
+  if (!nativeApp) return () => undefined
+  return listen('app:quit-requested', callback)
+}
+
+export async function exitApp(): Promise<void> {
+  if (nativeApp) await invoke('exit_app')
+}
+
 export async function hideQuickAdd(): Promise<void> {
   if (nativeApp) await invoke('hide_quick_add')
   else window.location.href = '/'

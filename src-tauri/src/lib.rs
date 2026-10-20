@@ -42,6 +42,11 @@ fn get_app_data(db: State<'_, TodoDb>) -> Result<db::AppData, String> {
 }
 
 #[tauri::command]
+fn exit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+#[tauri::command]
 fn get_diary_data(db: State<'_, TodoDb>) -> Result<db::DiaryData, String> {
     db.diary_data()
 }
@@ -356,7 +361,9 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "show" => show_main(app),
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        let _ = app.emit("app:quit-requested", ());
+                    }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -383,6 +390,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_app_data,
+            exit_app,
             get_diary_data,
             put_diary_asset,
             import_diary_asset,

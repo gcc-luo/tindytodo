@@ -9,6 +9,7 @@ import { Trash2 } from 'lucide-vue-next'
 import DiaryImageNode from './DiaryImageNode.vue'
 import { DiaryImage } from '../lib/diaryImageExtension'
 import { sanitizeDiaryHtml } from '../lib/diaryEditor'
+import { persistDiaryImageFile } from '../lib/diaryImageUpload'
 import { importDiaryImage, isNativeApp, putDiaryAsset, resolveDiaryAsset } from '../api'
 import type { DiaryEntry, DiaryTag } from '../types'
 
@@ -142,39 +143,32 @@ async function insertImageFile(file: File) {
     return
   }
   try {
-    let id: string
-    let source: string | null = null
-    if (isNativeApp) {
-      const imported = await importDiaryImage(props.entry.id)
-      if (!imported) return
-      id = imported.id
-      source = imported.src
-    } else {
-      id = crypto.randomUUID()
-      await putDiaryAsset({
-        id,
-        entryId: props.entry.id,
-        mimeType: file.type,
-        bytes: new Uint8Array(await file.arrayBuffer()),
-      })
-      source = await resolveDiaryAsset(id)
-    }
+    const id = await persistDiaryImageFile(file, props.entry.id, putDiaryAsset)
+    const source = await resolveDiaryAsset(id)
     if (!source) throw new Error('图片保存后无法读取')
-    editor.value?.chain().focus().insertContent({
-      type: 'diaryImage',
-      attrs: { assetId: id, alt: file.name || '日记图片' },
-    }).run()
+    insertImageAsset(id, file.name || '日记图片')
     if (source.startsWith('blob:')) URL.revokeObjectURL(source)
   } catch (error) {
     imageError.value = error instanceof Error ? error.message : '图片插入失败，请重试'
   }
 }
 
+function insertImageAsset(id: string, alt: string) {
+  editor.value?.chain().focus().insertContent({
+    type: 'diaryImage',
+    attrs: { assetId: id, alt },
+  }).run()
+}
+
 async function chooseImage() {
   imageError.value = ''
   if (isNativeApp) {
-    const input = new File([], 'image.png', { type: 'image/png' })
-    await insertImageFile(input)
+    try {
+      const imported = await importDiaryImage(props.entry.id)
+      if (imported) insertImageAsset(imported.id, '日记图片')
+    } catch (error) {
+      imageError.value = error instanceof Error ? error.message : '图片插入失败，请重试'
+    }
   } else {
     fileInput.value?.click()
   }

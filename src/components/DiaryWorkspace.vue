@@ -114,6 +114,8 @@ async function flushBeforeNavigation(): Promise<boolean> {
   }
 }
 
+defineExpose({ flushBeforeExit: flushBeforeNavigation })
+
 function attachAutosave(entryId: number) {
   autosave?.dispose()
   saveError.value = ''

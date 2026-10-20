@@ -534,6 +534,14 @@ impl TodoDb {
             .lock()
             .map_err(|_| "数据库暂时不可用".to_string())?;
         let transaction = connection.transaction().map_err(db_error)?;
+        for id in &keep_ids {
+            transaction
+                .execute(
+                    "UPDATE diary_asset SET pending_delete=0 WHERE id=?1 AND entry_id=?2",
+                    params![id, entry_id],
+                )
+                .map_err(db_error)?;
+        }
         let assets = read_diary_assets_for_entry(&transaction, entry_id)?;
         let removed = assets
             .into_iter()
@@ -1118,6 +1126,32 @@ mod tests {
         assert_eq!(stored.content_html, "<p>周会记录</p>");
         assert!(stored.title.is_empty());
         assert!(stored.tag_ids.is_empty());
+    }
+
+    #[test]
+    fn restoring_a_reference_cancels_pending_asset_deletion() {
+        let folder = tempfile::tempdir().unwrap();
+        let db = TodoDb::open(&folder.path().join("tinytodo.sqlite3")).unwrap();
+        let entry = db.create_diary_entry("2026-10-20".into()).unwrap();
+        let asset_id = "01234567-89ab-cdef-0123-456789abcdef".to_string();
+        db.register_diary_asset(
+            asset_id.clone(),
+            entry.id,
+            format!("diary-assets/{asset_id}.png"),
+            "image/png".into(),
+        )
+        .unwrap();
+
+        db.prune_diary_assets(entry.id, vec![]).unwrap();
+        assert_eq!(db.pending_diary_assets().unwrap().len(), 1);
+
+        db.prune_diary_assets(entry.id, vec![asset_id.clone()])
+            .unwrap();
+        assert!(db.pending_diary_assets().unwrap().is_empty());
+        assert_eq!(
+            db.diary_asset(&asset_id).unwrap().unwrap().pending_delete,
+            false
+        );
     }
 
     #[test]
