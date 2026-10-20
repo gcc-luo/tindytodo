@@ -4,6 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import type { AppData, DiaryData, DiaryEntry, DiaryTag, TaskDraft, TaskChanges, TodoList, TodoTask, WorkSettings } from './types'
 import * as diaryBrowserStore from './lib/diaryBrowserStore'
 import type { DiaryAssetBlob } from './lib/diaryBrowserStore'
+import { referencedDiaryAssetIds } from './lib/diaryEditor'
 
 const STORAGE_KEY = 'tinytodo-local-v1'
 const WORK_SETTINGS_KEY = 'tinytodo-work-settings-v1'
@@ -92,7 +93,7 @@ export async function saveDiaryEntry(id: number, title: string, contentHtml: str
     ? invoke<DiaryEntry>('save_diary_entry', { id, title, contentHtml, tagIds })
     : diaryBrowserStore.saveDiaryEntry(id, title, contentHtml, tagIds)
   const saved = await entry
-  await pruneDiaryAssets(id, [...contentHtml.matchAll(/data-asset-id=["']([^"']+)["']/g)].map((match) => match[1]))
+  await pruneDiaryAssets(id, referencedDiaryAssetIds(contentHtml))
   return saved
 }
 

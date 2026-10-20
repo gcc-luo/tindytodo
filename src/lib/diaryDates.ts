@@ -1,4 +1,5 @@
 import type { DiaryEntry } from '../types'
+import { textFromDiaryHtml } from './diaryEditor'
 
 export function localDateKey(date = new Date()): string {
   const year = date.getFullYear()
@@ -30,4 +31,22 @@ export function monthEntryCounts(entries: DiaryEntry[], month: string): Map<stri
     counts.set(entry.entry_date, (counts.get(entry.entry_date) ?? 0) + 1)
   }
   return counts
+}
+
+export interface DiaryEntryFilter {
+  date: string | null
+  tagId: number | null
+  query: string
+  trash: boolean
+}
+
+export function filterDiaryEntries(entries: DiaryEntry[], filter: DiaryEntryFilter): DiaryEntry[] {
+  const query = filter.query.trim().toLocaleLowerCase()
+  return entries.filter((entry) => {
+    if (filter.trash ? entry.deleted_at === null : entry.deleted_at !== null) return false
+    if (filter.date && entry.entry_date !== filter.date) return false
+    if (filter.tagId !== null && !entry.tag_ids.includes(filter.tagId)) return false
+    if (query && !`${entry.title} ${textFromDiaryHtml(entry.content_html)}`.toLocaleLowerCase().includes(query)) return false
+    return true
+  })
 }
