@@ -8,6 +8,26 @@ export function localDateKey(date = new Date()): string {
   return `${year}-${month}-${day}`
 }
 
+export function monthCalendarCells(date: Date): Date[] {
+  const first = new Date(date.getFullYear(), date.getMonth(), 1)
+  const firstCell = new Date(first.getFullYear(), first.getMonth(), 1 - first.getDay())
+  return Array.from({ length: 42 }, (_, index) => {
+    const cell = new Date(firstCell)
+    cell.setDate(firstCell.getDate() + index)
+    return cell
+  })
+}
+
+export function diaryEntryPreview(entry: DiaryEntry, maxCharacters = 42): string {
+  const title = entry.title.trim()
+  if (title) return Array.from(title).slice(0, maxCharacters).join('')
+  const text = textFromDiaryHtml(entry.content_html)
+  if (!text) return '（无标题）'
+  const punctuation = text.search(/[。！？.!?]/u)
+  const firstSentence = punctuation >= 0 ? text.slice(0, punctuation + 1) : text
+  return Array.from(firstSentence).slice(0, maxCharacters).join('')
+}
+
 export function groupEntriesByDate(entries: DiaryEntry[]): Map<string, DiaryEntry[]> {
   const grouped = new Map<string, DiaryEntry[]>()
   const activeEntries = entries

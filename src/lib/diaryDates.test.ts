@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterDiaryEntries, groupEntriesByDate, localDateKey, monthEntryCounts } from './diaryDates'
+import { diaryEntryPreview, filterDiaryEntries, groupEntriesByDate, localDateKey, monthCalendarCells, monthEntryCounts } from './diaryDates'
 import type { DiaryEntry } from '../types'
 
 const entry = (id: number, entry_date: string, created_at: string, title = `条目 ${id}`, content_html = '<p>正文</p>'): DiaryEntry => ({
@@ -39,5 +39,19 @@ describe('diary date navigation', () => {
     ]
     expect(filterDiaryEntries(rows, { date: '2026-10-20', tagId: 7, query: '晨间散步', trash: false }).map((item) => item.id)).toEqual([1])
     expect(filterDiaryEntries(rows, { date: null, tagId: null, query: '晨间散步', trash: true }).map((item) => item.id)).toEqual([4])
+  })
+
+  it('builds a Sunday-first 42-day calendar grid with adjacent month dates', () => {
+    const cells = monthCalendarCells(new Date(2026, 9, 20))
+    expect(cells).toHaveLength(42)
+    expect(cells[0].getDay()).toBe(0)
+    expect(localDateKey(cells[0])).toBe('2026-09-27')
+    expect(localDateKey(cells[41])).toBe('2026-11-07')
+  })
+
+  it('uses the first sentence for blank-title previews and truncates by Unicode characters', () => {
+    const content = '今天去了河边散步，看到一只很可爱的小狗。后面还有一些内容。'
+    expect(diaryEntryPreview(entry(1, '2026-10-20', 'now', '', `<p>${content}</p>`))).toBe('今天去了河边散步，看到一只很可爱的小狗。')
+    expect([...diaryEntryPreview(entry(2, '2026-10-20', 'now', '', `<p>${'🌿'.repeat(60)}</p>`))]).toHaveLength(42)
   })
 })

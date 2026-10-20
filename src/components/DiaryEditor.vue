@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { EditorContent, VueNodeViewRenderer, useEditor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
 import { TextStyleKit } from '@tiptap/extension-text-style'
 import Link from '@tiptap/extension-link'
+import { Trash2 } from 'lucide-vue-next'
 import DiaryImageNode from './DiaryImageNode.vue'
 import { DiaryImage } from '../lib/diaryImageExtension'
 import { sanitizeDiaryHtml } from '../lib/diaryEditor'
@@ -27,10 +28,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   save: [snapshot: DiarySnapshot]
   retry: []
+  trash: []
 }>()
 
 const title = ref(props.entry.title)
 const selectedTagIds = ref([...props.entry.tag_ids])
+const titleInput = ref<HTMLInputElement>()
+watch(() => props.entry.tag_ids, (ids) => { selectedTagIds.value = [...ids] })
 const fileInput = ref<HTMLInputElement>()
 const emojiMenuOpen = ref(false)
 const imageError = ref('')
@@ -184,6 +188,10 @@ async function handleFileChange(event: Event) {
 }
 
 const emojis = ['🙂', '😊', '❤️', '✨', '🌿', '☕', '🎉', '🌤️']
+
+onMounted(() => {
+  if (!props.entry.title) titleInput.value?.focus()
+})
 </script>
 
 <template>
@@ -194,9 +202,12 @@ const emojis = ['🙂', '😊', '❤️', '✨', '🌿', '☕', '🎉', '🌤️
         <input ref="titleInput" class="diary-title-input" :value="entry.title" placeholder="给这篇日记起个标题" maxlength="200" @input="updateTitle">
         <p class="diary-entry-meta">创建于 {{ new Date(entry.created_at).toLocaleString() }}</p>
       </div>
-      <div class="diary-save-indicator" :class="`is-${saveStatus ?? 'idle'}`" role="status">
-        <span>{{ statusText }}</span>
-        <button v-if="saveStatus === 'error'" type="button" @click="emit('retry')">重试</button>
+      <div class="diary-entry-actions">
+        <button class="diary-move-trash" type="button" @click="emit('trash')"><Trash2 :size="14" />移入回收站</button>
+        <div class="diary-save-indicator" :class="`is-${saveStatus ?? 'idle'}`" role="status">
+          <span>{{ statusText }}</span>
+          <button v-if="saveStatus === 'error'" type="button" @click="emit('retry')">重试</button>
+        </div>
       </div>
     </header>
 
