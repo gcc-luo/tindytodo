@@ -1,6 +1,7 @@
 import { emit, listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
-import type { AppData, TaskDraft, TaskChanges, TodoList, TodoTask, WorkSettings } from './types'
+import type { AppData, DiaryData, DiaryEntry, DiaryTag, TaskDraft, TaskChanges, TodoList, TodoTask, WorkSettings } from './types'
+import * as diaryBrowserStore from './lib/diaryBrowserStore'
 
 const STORAGE_KEY = 'tinytodo-local-v1'
 const WORK_SETTINGS_KEY = 'tinytodo-work-settings-v1'
@@ -70,6 +71,56 @@ function localTimestamp(): string {
 
 export async function getAppData(): Promise<AppData> {
   return nativeApp ? invoke<AppData>('get_app_data') : readLocalData()
+}
+
+export async function getDiaryData(): Promise<DiaryData> {
+  return nativeApp
+    ? invoke<DiaryData>('get_diary_data')
+    : diaryBrowserStore.getDiaryData()
+}
+
+export async function createDiaryEntry(entryDate: string): Promise<DiaryEntry> {
+  return nativeApp
+    ? invoke<DiaryEntry>('create_diary_entry', { entryDate })
+    : diaryBrowserStore.createDiaryEntry(entryDate)
+}
+
+export async function saveDiaryEntry(id: number, title: string, contentHtml: string, tagIds: number[]): Promise<DiaryEntry> {
+  return nativeApp
+    ? invoke<DiaryEntry>('save_diary_entry', { id, title, contentHtml, tagIds })
+    : diaryBrowserStore.saveDiaryEntry(id, title, contentHtml, tagIds)
+}
+
+export async function createDiaryTag(name: string): Promise<DiaryTag> {
+  return nativeApp
+    ? invoke<DiaryTag>('create_diary_tag', { name })
+    : diaryBrowserStore.createDiaryTag(name)
+}
+
+export async function renameDiaryTag(id: number, name: string): Promise<DiaryTag> {
+  return nativeApp
+    ? invoke<DiaryTag>('rename_diary_tag', { id, name })
+    : diaryBrowserStore.renameDiaryTag(id, name)
+}
+
+export async function deleteDiaryTag(id: number): Promise<void> {
+  if (nativeApp) await invoke('delete_diary_tag', { id })
+  else await diaryBrowserStore.deleteDiaryTag(id)
+}
+
+export async function trashDiaryEntry(id: number): Promise<void> {
+  if (nativeApp) await invoke('trash_diary_entry', { id })
+  else await diaryBrowserStore.trashDiaryEntry(id)
+}
+
+export async function restoreDiaryEntry(id: number): Promise<void> {
+  if (nativeApp) await invoke('restore_diary_entry', { id })
+  else await diaryBrowserStore.restoreDiaryEntry(id)
+}
+
+export async function purgeDiaryEntry(id: number): Promise<void> {
+  if (nativeApp) await invoke('purge_diary_entry', { id })
+  else await diaryBrowserStore.purgeDiaryEntry(id)
 }
 
 export async function getShortcutInfo(): Promise<ShortcutInfo> {

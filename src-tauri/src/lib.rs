@@ -41,6 +41,57 @@ fn get_app_data(db: State<'_, TodoDb>) -> Result<db::AppData, String> {
 }
 
 #[tauri::command]
+fn get_diary_data(db: State<'_, TodoDb>) -> Result<db::DiaryData, String> {
+    db.diary_data()
+}
+
+#[tauri::command]
+fn create_diary_entry(db: State<'_, TodoDb>, entry_date: String) -> Result<db::DiaryEntry, String> {
+    db.create_diary_entry(entry_date)
+}
+
+#[tauri::command]
+fn save_diary_entry(
+    db: State<'_, TodoDb>,
+    id: i64,
+    title: String,
+    content_html: String,
+    tag_ids: Vec<i64>,
+) -> Result<db::DiaryEntry, String> {
+    db.update_diary_entry(id, title, content_html, tag_ids)
+}
+
+#[tauri::command]
+fn create_diary_tag(db: State<'_, TodoDb>, name: String) -> Result<db::DiaryTag, String> {
+    db.create_diary_tag(name)
+}
+
+#[tauri::command]
+fn rename_diary_tag(db: State<'_, TodoDb>, id: i64, name: String) -> Result<db::DiaryTag, String> {
+    db.rename_diary_tag(id, name)
+}
+
+#[tauri::command]
+fn delete_diary_tag(db: State<'_, TodoDb>, id: i64) -> Result<(), String> {
+    db.delete_diary_tag(id)
+}
+
+#[tauri::command]
+fn trash_diary_entry(db: State<'_, TodoDb>, id: i64) -> Result<(), String> {
+    db.trash_diary_entry(id)
+}
+
+#[tauri::command]
+fn restore_diary_entry(db: State<'_, TodoDb>, id: i64) -> Result<(), String> {
+    db.restore_diary_entry(id)
+}
+
+#[tauri::command]
+fn purge_diary_entry(db: State<'_, TodoDb>, id: i64) -> Result<Vec<db::DiaryAsset>, String> {
+    db.purge_diary_entry(id)
+}
+
+#[tauri::command]
 fn get_work_settings(db: State<'_, TodoDb>) -> Result<db::WorkSettings, String> {
     db.work_settings()
 }
@@ -251,6 +302,15 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_app_data,
+            get_diary_data,
+            create_diary_entry,
+            save_diary_entry,
+            create_diary_tag,
+            rename_diary_tag,
+            delete_diary_tag,
+            trash_diary_entry,
+            restore_diary_entry,
+            purge_diary_entry,
             get_work_settings,
             save_work_settings,
             create_task,

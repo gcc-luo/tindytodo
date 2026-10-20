@@ -48,6 +48,12 @@ pub struct DiaryTag {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiaryData {
+    pub entries: Vec<DiaryEntry>,
+    pub tags: Vec<DiaryTag>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiaryAsset {
     pub id: String,
     pub entry_id: Option<i64>,
@@ -429,6 +435,27 @@ impl TodoDb {
             .map_err(map_diary_tag_insert_error)?;
         read_diary_tag(&connection, connection.last_insert_rowid())?
             .ok_or_else(|| "新标签没有成功保存".to_string())
+    }
+
+    pub fn diary_tags(&self) -> Result<Vec<DiaryTag>, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "数据库暂时不可用".to_string())?;
+        let mut statement = connection
+            .prepare("SELECT * FROM diary_tag ORDER BY created_at ASC, id ASC")
+            .map_err(db_error)?;
+        let rows = statement
+            .query_map([], diary_tag_from_row)
+            .map_err(db_error)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(db_error)
+    }
+
+    pub fn diary_data(&self) -> Result<DiaryData, String> {
+        Ok(DiaryData {
+            entries: self.diary_entries(true)?,
+            tags: self.diary_tags()?,
+        })
     }
 
     pub fn rename_diary_tag(&self, id: i64, name: String) -> Result<DiaryTag, String> {
