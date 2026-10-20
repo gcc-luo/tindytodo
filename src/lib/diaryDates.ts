@@ -1,0 +1,33 @@
+import type { DiaryEntry } from '../types'
+
+export function localDateKey(date = new Date()): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export function groupEntriesByDate(entries: DiaryEntry[]): Map<string, DiaryEntry[]> {
+  const grouped = new Map<string, DiaryEntry[]>()
+  const activeEntries = entries
+    .filter((entry) => entry.deleted_at === null)
+    .slice()
+    .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id)
+
+  for (const entry of activeEntries) {
+    const sameDay = grouped.get(entry.entry_date) ?? []
+    sameDay.push(entry)
+    grouped.set(entry.entry_date, sameDay)
+  }
+
+  return grouped
+}
+
+export function monthEntryCounts(entries: DiaryEntry[], month: string): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const entry of entries) {
+    if (entry.deleted_at !== null || !entry.entry_date.startsWith(`${month}-`)) continue
+    counts.set(entry.entry_date, (counts.get(entry.entry_date) ?? 0) + 1)
+  }
+  return counts
+}
