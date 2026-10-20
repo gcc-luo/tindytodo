@@ -39,7 +39,11 @@
     ],
     "security": {
       "csp": null,
-      "capabilities": ["default", "desktop-capability"]
+      "capabilities": ["default", "desktop-capability"],
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/diary-assets/**/*"]
+      }
     }
   },
   "bundle": {

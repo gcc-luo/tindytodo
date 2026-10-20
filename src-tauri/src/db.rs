@@ -551,6 +551,61 @@ impl TodoDb {
         Ok(removed)
     }
 
+    pub fn register_diary_asset(
+        &self,
+        id: String,
+        entry_id: i64,
+        relative_path: String,
+        mime_type: String,
+    ) -> Result<DiaryAsset, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "数据库暂时不可用".to_string())?;
+        connection
+            .execute(
+                "INSERT INTO diary_asset (id, entry_id, relative_path, mime_type) VALUES (?1, ?2, ?3, ?4)",
+                params![id, entry_id, relative_path, mime_type],
+            )
+            .map_err(db_error)?;
+        read_diary_asset(&connection, &id)?.ok_or_else(|| "图片资源保存后无法读取".to_string())
+    }
+
+    pub fn diary_asset(&self, id: &str) -> Result<Option<DiaryAsset>, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "数据库暂时不可用".to_string())?;
+        read_diary_asset(&connection, id)
+    }
+
+    pub fn pending_diary_assets(&self) -> Result<Vec<DiaryAsset>, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "数据库暂时不可用".to_string())?;
+        let mut statement = connection
+            .prepare(
+                "SELECT * FROM diary_asset WHERE pending_delete=1 ORDER BY created_at ASC, id ASC",
+            )
+            .map_err(db_error)?;
+        let rows = statement
+            .query_map([], diary_asset_from_row)
+            .map_err(db_error)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(db_error)
+    }
+
+    pub fn remove_diary_asset_record(&self, id: &str) -> Result<(), String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "数据库暂时不可用".to_string())?;
+        connection
+            .execute("DELETE FROM diary_asset WHERE id=?1", [id])
+            .map_err(db_error)?;
+        Ok(())
+    }
+
     pub fn purge_diary_entry(&self, id: i64) -> Result<Vec<DiaryAsset>, String> {
         let mut connection = self
             .connection
@@ -790,6 +845,17 @@ fn read_diary_tag(connection: &Connection, id: i64) -> Result<Option<DiaryTag>, 
             "SELECT * FROM diary_tag WHERE id=?1",
             [id],
             diary_tag_from_row,
+        )
+        .optional()
+        .map_err(db_error)
+}
+
+fn read_diary_asset(connection: &Connection, id: &str) -> Result<Option<DiaryAsset>, String> {
+    connection
+        .query_row(
+            "SELECT * FROM diary_asset WHERE id=?1",
+            [id],
+            diary_asset_from_row,
         )
         .optional()
         .map_err(db_error)

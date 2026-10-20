@@ -1,7 +1,9 @@
 import { emit, listen } from '@tauri-apps/api/event'
-import { invoke } from '@tauri-apps/api/core'
+import { convertFileSrc, invoke } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-dialog'
 import type { AppData, DiaryData, DiaryEntry, DiaryTag, TaskDraft, TaskChanges, TodoList, TodoTask, WorkSettings } from './types'
 import * as diaryBrowserStore from './lib/diaryBrowserStore'
+import type { DiaryAssetBlob } from './lib/diaryBrowserStore'
 
 const STORAGE_KEY = 'tinytodo-local-v1'
 const WORK_SETTINGS_KEY = 'tinytodo-work-settings-v1'
@@ -86,9 +88,57 @@ export async function createDiaryEntry(entryDate: string): Promise<DiaryEntry> {
 }
 
 export async function saveDiaryEntry(id: number, title: string, contentHtml: string, tagIds: number[]): Promise<DiaryEntry> {
-  return nativeApp
+  const entry = nativeApp
     ? invoke<DiaryEntry>('save_diary_entry', { id, title, contentHtml, tagIds })
     : diaryBrowserStore.saveDiaryEntry(id, title, contentHtml, tagIds)
+  const saved = await entry
+  await pruneDiaryAssets(id, [...contentHtml.matchAll(/data-asset-id=["']([^"']+)["']/g)].map((match) => match[1]))
+  return saved
+}
+
+export async function putDiaryAsset(asset: DiaryAssetBlob): Promise<void> {
+  if (nativeApp) {
+    await invoke('put_diary_asset', {
+      id: asset.id,
+      entryId: asset.entryId,
+      mimeType: asset.mimeType,
+      bytes: Array.from(asset.bytes),
+    })
+  } else {
+    await diaryBrowserStore.putDiaryAsset(asset)
+  }
+}
+
+export async function importDiaryImage(entryId: number): Promise<{ id: string; src: string; mimeType: string } | null> {
+  if (!nativeApp) return null
+  const path = await open({
+    multiple: false,
+    filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }],
+  })
+  if (typeof path !== 'string') return null
+  const id = crypto.randomUUID()
+  const asset = await invoke<{ id: string; mime_type: string }>('import_diary_asset', { id, entryId, path })
+  const src = await resolveDiaryAsset(asset.id)
+  if (!src) throw new Error('图片保存后无法读取')
+  return { id: asset.id, src, mimeType: asset.mime_type }
+}
+
+export async function resolveDiaryAsset(id: string): Promise<string | null> {
+  if (nativeApp) {
+    const path = await invoke<string>('resolve_diary_asset', { id })
+    return convertFileSrc(path)
+  }
+  return diaryBrowserStore.resolveDiaryAsset(id)
+}
+
+export async function deleteDiaryAsset(id: string): Promise<void> {
+  if (nativeApp) await invoke('delete_diary_asset', { id })
+  else await diaryBrowserStore.deleteDiaryAsset(id)
+}
+
+export async function pruneDiaryAssets(entryId: number, keepIds: string[]): Promise<void> {
+  if (nativeApp) await invoke('prune_diary_assets', { entryId, keepIds })
+  else await diaryBrowserStore.pruneDiaryAssets(entryId, keepIds)
 }
 
 export async function createDiaryTag(name: string): Promise<DiaryTag> {

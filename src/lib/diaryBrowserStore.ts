@@ -1,6 +1,15 @@
 import type { DiaryData, DiaryEntry, DiaryTag } from '../types'
 
 const STORAGE_KEY = 'tinytodo-diary-v1'
+const ASSET_DB = 'tinytodo-diary-assets-v1'
+const ASSET_STORE = 'assets'
+
+export interface DiaryAssetBlob {
+  id: string
+  entryId: number
+  mimeType: string
+  bytes: Uint8Array
+}
 
 const emptyData = (): DiaryData => ({ entries: [], tags: [] })
 
@@ -121,4 +130,65 @@ export async function restoreDiaryEntry(id: number): Promise<void> {
 export async function purgeDiaryEntry(id: number): Promise<void> {
   const data = readData()
   writeData({ ...data, entries: data.entries.filter((entry) => entry.id !== id) })
+  await pruneDiaryAssets(id, [])
+}
+
+function openAssetDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(ASSET_DB, 1)
+    request.onupgradeneeded = () => request.result.createObjectStore(ASSET_STORE, { keyPath: 'id' })
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error ?? new Error('打开日记图片存储失败'))
+  })
+}
+
+async function assetRequest<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  const database = await openAssetDb()
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(ASSET_STORE, mode)
+    const request = run(transaction.objectStore(ASSET_STORE))
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error ?? new Error('日记图片存储操作失败'))
+    transaction.oncomplete = () => database.close()
+    transaction.onerror = () => { database.close(); reject(transaction.error ?? new Error('日记图片存储事务失败')) }
+    transaction.onabort = () => { database.close(); reject(transaction.error ?? new Error('日记图片存储事务已取消')) }
+  })
+}
+
+export async function putDiaryAsset(asset: DiaryAssetBlob): Promise<void> {
+  await assetRequest('readwrite', (store) => store.put({ ...asset, bytes: new Uint8Array(asset.bytes) }))
+}
+
+export async function getDiaryAsset(id: string): Promise<Uint8Array | null> {
+  const asset = await assetRequest<DiaryAssetBlob | undefined>('readonly', (store) => store.get(id))
+  return asset ? new Uint8Array(asset.bytes) : null
+}
+
+export async function deleteDiaryAsset(id: string): Promise<void> {
+  await assetRequest('readwrite', (store) => store.delete(id))
+}
+
+export async function pruneDiaryAssets(entryId: number, keepIds: string[]): Promise<void> {
+  const database = await openAssetDb()
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(ASSET_STORE, 'readwrite')
+    const store = transaction.objectStore(ASSET_STORE)
+    const request = store.openCursor()
+    request.onsuccess = () => {
+      const cursor = request.result
+      if (!cursor) return
+      const value = cursor.value as DiaryAssetBlob
+      if (value.entryId === entryId && !keepIds.includes(value.id)) cursor.delete()
+      cursor.continue()
+    }
+    transaction.oncomplete = () => { database.close(); resolve() }
+    transaction.onerror = () => { database.close(); reject(transaction.error ?? new Error('日记图片清理失败')) }
+    transaction.onabort = () => { database.close(); reject(transaction.error ?? new Error('日记图片清理已取消')) }
+  })
+}
+
+export async function resolveDiaryAsset(id: string): Promise<string | null> {
+  const asset = await assetRequest<DiaryAssetBlob | undefined>('readonly', (store) => store.get(id))
+  if (!asset) return null
+  return URL.createObjectURL(new Blob([asset.bytes], { type: asset.mimeType }))
 }

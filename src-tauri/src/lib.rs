@@ -1,4 +1,5 @@
 mod db;
+mod diary_assets;
 
 use db::{TaskDraft, TodoDb};
 use serde::Serialize;
@@ -46,6 +47,77 @@ fn get_diary_data(db: State<'_, TodoDb>) -> Result<db::DiaryData, String> {
 }
 
 #[tauri::command]
+fn put_diary_asset(
+    app: tauri::AppHandle,
+    db: State<'_, TodoDb>,
+    id: String,
+    entry_id: i64,
+    mime_type: String,
+    bytes: Vec<u8>,
+) -> Result<db::DiaryAsset, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    diary_assets::save_bytes(&db, &data_dir, id, entry_id, mime_type, &bytes)
+}
+
+#[tauri::command]
+fn import_diary_asset(
+    app: tauri::AppHandle,
+    db: State<'_, TodoDb>,
+    id: String,
+    entry_id: i64,
+    path: String,
+) -> Result<db::DiaryAsset, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    diary_assets::import_file(&db, &data_dir, id, entry_id, std::path::Path::new(&path))
+}
+
+#[tauri::command]
+fn resolve_diary_asset(
+    app: tauri::AppHandle,
+    db: State<'_, TodoDb>,
+    id: String,
+) -> Result<String, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    diary_assets::resolve(&db, &data_dir, &id)
+}
+
+#[tauri::command]
+fn delete_diary_asset(
+    app: tauri::AppHandle,
+    db: State<'_, TodoDb>,
+    id: String,
+) -> Result<(), String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    diary_assets::delete(&db, &data_dir, &id)
+}
+
+#[tauri::command]
+fn prune_diary_assets(
+    app: tauri::AppHandle,
+    db: State<'_, TodoDb>,
+    entry_id: i64,
+    keep_ids: Vec<String>,
+) -> Result<(), String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    diary_assets::prune(&db, &data_dir, entry_id, keep_ids)
+}
+
+#[tauri::command]
 fn create_diary_entry(db: State<'_, TodoDb>, entry_date: String) -> Result<db::DiaryEntry, String> {
     db.create_diary_entry(entry_date)
 }
@@ -87,8 +159,13 @@ fn restore_diary_entry(db: State<'_, TodoDb>, id: i64) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn purge_diary_entry(db: State<'_, TodoDb>, id: i64) -> Result<Vec<db::DiaryAsset>, String> {
-    db.purge_diary_entry(id)
+fn purge_diary_entry(app: tauri::AppHandle, db: State<'_, TodoDb>, id: i64) -> Result<(), String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    let assets = db.purge_diary_entry(id)?;
+    diary_assets::delete_many(&db, &data_dir, assets)
 }
 
 #[tauri::command]
@@ -222,6 +299,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, pressed, event| {
@@ -238,6 +316,9 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let database =
                 TodoDb::open(&data_dir.join("tinytodo.sqlite3")).map_err(std::io::Error::other)?;
+            if let Err(error) = diary_assets::purge_pending(&database, &data_dir) {
+                eprintln!("清理待删除的日记图片失败，将在下次启动时重试：{error}");
+            }
             app.manage(database);
 
             let mut shortcut_info = ShortcutInfo {
@@ -303,6 +384,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_app_data,
             get_diary_data,
+            put_diary_asset,
+            import_diary_asset,
+            resolve_diary_asset,
+            delete_diary_asset,
+            prune_diary_assets,
             create_diary_entry,
             save_diary_entry,
             create_diary_tag,
