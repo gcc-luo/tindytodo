@@ -329,7 +329,14 @@ kbd { min-width: 19px; padding: 2px 4px; border: 1px solid #e7ebe4; border-radiu
 .diary-tag-chip { padding: 4px 10px; border: 1px solid #dfe6dc; border-radius: 999px; background: #fff; color: #7c877b; cursor: pointer; font-size: 11px; }
 .diary-tag-chip:hover { border-color: #9db99d; color: #45694c; }
 .diary-tag-chip.active { border-color: #b4cfb5; background: #edf5eb; color: #3f704a; }
-.diary-editor-toolbar { position: sticky; z-index: 2; top: 0; display: flex; min-height: 44px; flex: 0 0 auto; align-items: center; gap: 3px; overflow-x: auto; padding: 5px clamp(16px, 3vw, 48px); border-top: 1px solid #edf0ea; border-bottom: 1px solid #e9ede7; background: #fbfcfa; scrollbar-width: thin; }
+.diary-editor-toolbar { position: sticky; z-index: 2; top: 0; display: flex; min-height: 44px; flex: 0 0 auto; align-items: center; gap: 3px; overflow-x: auto; padding: 5px clamp(16px, 3vw, 48px); border-top: 1px solid #edf0ea; border-bottom: 1px solid #e9ede7; background: #fbfcfa; }
+.diary-editor-toolbar, .diary-editor-content { scrollbar-width: thin; scrollbar-color: #c8d6c7 transparent; }
+.diary-editor-toolbar::-webkit-scrollbar, .diary-editor-content::-webkit-scrollbar { width: 8px; height: 8px; }
+.diary-editor-toolbar::-webkit-scrollbar-track, .diary-editor-content::-webkit-scrollbar-track { background: transparent; }
+.diary-editor-toolbar::-webkit-scrollbar-thumb, .diary-editor-content::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: #c8d6c7; background-clip: padding-box; }
+.diary-editor-toolbar::-webkit-scrollbar-thumb:hover, .diary-editor-content::-webkit-scrollbar-thumb:hover { background-color: #a6bda7; }
+.diary-editor-toolbar::-webkit-scrollbar-button, .diary-editor-content::-webkit-scrollbar-button { display: none; }
+.diary-editor-toolbar::-webkit-scrollbar-corner, .diary-editor-content::-webkit-scrollbar-corner { background: transparent; }
 .diary-editor-toolbar button { display: inline-grid; min-width: 30px; height: 30px; flex: 0 0 auto; place-items: center; padding: 0 7px; border: 0; border-radius: 5px; background: transparent; color: #657066; cursor: pointer; font-size: 13px; }
 .diary-editor-toolbar button:hover, .diary-editor-toolbar button.active { background: #eaf2e9; color: #356747; }
 .diary-editor-toolbar button:disabled { opacity: .35; cursor: default; }

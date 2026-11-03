@@ -253,7 +253,7 @@ async function copyActiveList(): Promise<void> {
   const list = activeList.value
   if (!list || !activeListTasks.value.length) return
   try {
-    await copyText(formatListForCopy(list, activeListTasks.value))
+    await copyText(formatListForCopy(activeListTasks.value))
     flash(`“${list.name}”里的 ${activeListTasks.value.length} 个任务已复制，随时可以粘贴使用`)
   } catch (error) {
     flash(error instanceof Error ? error.message : String(error))
