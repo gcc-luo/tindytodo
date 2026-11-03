@@ -1,6 +1,6 @@
 [package]
 name = "tinytodo"
-version = "0.0.8"
+version = "0.0.9"
 description = "A quiet desktop todo list"
 authors = ["TinyTodo"]
 edition = "2021"
@@ -19,7 +19,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2", features = ["tray-icon", "protocol-asset"] }
 tauri-plugin-dialog = "2.8.3"
-tauri-plugin-global-shortcut = "2"
 
 [dev-dependencies]
 tempfile = "3"

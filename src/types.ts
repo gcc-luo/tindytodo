@@ -3,6 +3,8 @@ export type TaskStatus = 0 | 1
 export type ReminderRepeat = 'daily' | 'once'
 
 export interface WorkReminderSettings {
+  id: string
+  content: string
   enabled: boolean
   time: string
   repeat: ReminderRepeat
@@ -11,8 +13,7 @@ export interface WorkReminderSettings {
 }
 
 export interface WorkSettings {
-  lunch: WorkReminderSettings
-  offWork: WorkReminderSettings
+  reminders: WorkReminderSettings[]
 }
 
 export interface TodoTask {

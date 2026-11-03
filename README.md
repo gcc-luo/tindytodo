@@ -8,7 +8,6 @@ TinyTodo 是一个本地优先的 Windows 桌面待办工具，使用 Tauri 2、
 - 快速添加、日期和时间、优先级、备注、自动保存
 - 拖拽排序、跨任务搜索、清单重命名和删除
 - 系统托盘常驻，关闭主窗口时收起到托盘
-- 全局快捷记录窗口，可在设置中切换快捷键
 - 任务数据保存在本机 SQLite 数据库，不需要登录或网络
 
 ## 开发运行
@@ -52,10 +51,6 @@ git push origin v0.2.0
 ```
 
 版本标签必须与 `package.json`、`src-tauri/tauri.conf.json` 和 Rust crate 版本一致。发布工作流会校验版本，构建签名安装包，生成 `latest.json` 并上传到 Release。只要 Release 使用同一更新器私钥签名，已安装的 Windows 版本就能验证并安装它。
-
-## 快捷键
-
-默认尝试 `Ctrl + Shift + Space`。若被其他程序占用，启动时会依次尝试 `Ctrl + Alt + Space` 和 `Alt + Shift + T`。当前生效组合显示在侧栏，也可以在右上角设置中更改。
 
 ## 数据
 

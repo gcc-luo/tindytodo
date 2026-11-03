@@ -1,9 +1,7 @@
 import type { WorkReminderSettings, WorkSettings } from '../types'
 
-export type ReminderKind = 'lunch' | 'offWork'
-
 export interface ReminderOccurrence {
-  kind: ReminderKind
+  reminder: WorkReminderSettings
   at: Date
 }
 
@@ -49,10 +47,10 @@ export function nextOccurrence(reminder: WorkReminderSettings, now: Date): Date 
 }
 
 export function nextReminder(settings: WorkSettings, now: Date): ReminderOccurrence | null {
-  const candidates = (Object.entries(settings) as Array<[ReminderKind, WorkReminderSettings]>)
-    .map(([kind, reminder]) => {
+  const candidates = settings.reminders
+    .map((reminder) => {
       const at = nextOccurrence(reminder, now)
-      return at ? { kind, at } : null
+      return at ? { reminder, at } : null
     })
     .filter((item): item is ReminderOccurrence => item !== null)
     .sort((left, right) => left.at.getTime() - right.at.getTime())

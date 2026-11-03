@@ -85,6 +85,8 @@ pub struct AppData {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkReminderSettings {
+    pub id: String,
+    pub content: String,
     pub enabled: bool,
     pub time: String,
     pub repeat: String,
@@ -94,9 +96,23 @@ pub struct WorkReminderSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkSettings {
-    pub lunch: WorkReminderSettings,
+    pub reminders: Vec<WorkReminderSettings>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LegacyWorkSettings {
+    lunch: LegacyWorkReminderSettings,
     #[serde(rename = "offWork")]
-    pub off_work: WorkReminderSettings,
+    off_work: LegacyWorkReminderSettings,
+}
+
+#[derive(Debug, Deserialize)]
+struct LegacyWorkReminderSettings {
+    enabled: bool,
+    time: String,
+    repeat: String,
+    date: Option<String>,
+    completed: bool,
 }
 
 pub struct TodoDb {
@@ -216,10 +232,7 @@ impl TodoDb {
             .optional()
             .map_err(db_error)?;
         stored
-            .map(|value| {
-                serde_json::from_str(&value)
-                    .map_err(|_| "工作时间设置已损坏，已恢复默认值".to_string())
-            })
+            .map(|value| parse_work_settings(&value))
             .unwrap_or_else(|| Ok(default_work_settings()))
     }
 
@@ -690,27 +703,49 @@ impl TodoDb {
 
 fn default_work_settings() -> WorkSettings {
     WorkSettings {
-        lunch: WorkReminderSettings {
-            enabled: false,
-            time: "12:00".to_string(),
-            repeat: "daily".to_string(),
-            date: None,
-            completed: false,
-        },
-        off_work: WorkReminderSettings {
-            enabled: false,
-            time: "18:00".to_string(),
-            repeat: "daily".to_string(),
-            date: None,
-            completed: false,
-        },
+        reminders: Vec::new(),
     }
 }
 
+fn parse_work_settings(value: &str) -> Result<WorkSettings, String> {
+    if let Ok(settings) = serde_json::from_str::<WorkSettings>(value) {
+        return Ok(settings);
+    }
+    let legacy: LegacyWorkSettings = serde_json::from_str(value)
+        .map_err(|_| "提醒设置已损坏，已恢复默认值".to_string())?;
+    let reminder = |id: &str, content: &str, old: LegacyWorkReminderSettings| {
+        WorkReminderSettings {
+            id: id.to_string(),
+            content: content.to_string(),
+            enabled: old.enabled,
+            time: old.time,
+            repeat: old.repeat,
+            date: old.date,
+            completed: old.completed,
+        }
+    };
+    Ok(WorkSettings {
+        reminders: vec![
+            reminder("legacy-lunch", "午休时间到了", legacy.lunch),
+            reminder("legacy-off-work", "下班啦，今天也辛苦了", legacy.off_work),
+        ],
+    })
+}
+
 fn validate_work_settings(settings: &WorkSettings) -> Result<(), String> {
-    for reminder in [&settings.lunch, &settings.off_work] {
+    let mut ids = std::collections::HashSet::new();
+    for reminder in &settings.reminders {
+        if reminder.id.trim().is_empty() || !ids.insert(&reminder.id) {
+            return Err("提醒标识无效或重复".to_string());
+        }
+        if reminder.content.chars().count() > 100 {
+            return Err("提醒内容不能超过 100 个字符".to_string());
+        }
         if !["daily", "once"].contains(&reminder.repeat.as_str()) {
             return Err("提醒重复方式无效".to_string());
+        }
+        if reminder.enabled && reminder.content.trim().is_empty() {
+            return Err("请填写提醒内容".to_string());
         }
         if reminder.time.len() != 5
             || !reminder.time.as_bytes()[2..3].eq(b":")
@@ -1067,16 +1102,20 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let db = TodoDb::open(&folder.path().join("tinytodo.sqlite3")).unwrap();
         let mut settings = db.work_settings().unwrap();
-        settings.off_work.enabled = true;
-        settings.off_work.time = "17:30".to_string();
-        settings.off_work.repeat = "once".to_string();
-        settings.off_work.date = Some("2026-09-21".to_string());
+        settings.reminders.push(WorkReminderSettings {
+            id: "work-end".to_string(),
+            content: "下班啦".to_string(),
+            enabled: true,
+            time: "17:30".to_string(),
+            repeat: "once".to_string(),
+            date: Some("2026-09-21".to_string()),
+            completed: false,
+        });
         db.save_work_settings(settings.clone()).unwrap();
-        assert_eq!(db.work_settings().unwrap().off_work.time, "17:30");
-        assert_eq!(
-            db.work_settings().unwrap().off_work.date,
-            settings.off_work.date
-        );
+        let stored = db.work_settings().unwrap();
+        assert_eq!(stored.reminders[0].time, "17:30");
+        assert_eq!(stored.reminders[0].content, "下班啦");
+        assert_eq!(stored.reminders[0].date, Some("2026-09-21".to_string()));
     }
 
     #[test]

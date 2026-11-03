@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "TinyTodo",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "identifier": "com.gengcc.tinytodo",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -20,21 +20,6 @@
         "minHeight": 580,
         "center": true,
         "resizable": true
-      },
-      {
-        "label": "quick-add",
-        "title": "快速添加 · TinyTodo",
-        "url": "index.html?quickAdd=1",
-        "width": 460,
-        "height": 220,
-        "minWidth": 420,
-        "minHeight": 200,
-        "center": true,
-        "visible": false,
-        "resizable": false,
-        "decorations": false,
-        "alwaysOnTop": true,
-        "skipTaskbar": true
       }
     ],
     "security": {

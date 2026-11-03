@@ -11,26 +11,30 @@ const WORK_SETTINGS_KEY = 'tinytodo-work-settings-v1'
 const nativeApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 export const isNativeApp = nativeApp
 
-export interface ShortcutInfo {
-  label: string
-  registered: boolean
-}
+export const defaultWorkSettings = (): WorkSettings => ({ reminders: [] })
 
-export const defaultWorkSettings = (): WorkSettings => ({
-  lunch: { enabled: false, time: '12:00', repeat: 'daily', date: null, completed: false },
-  offWork: { enabled: false, time: '18:00', repeat: 'daily', date: null, completed: false },
-})
+function migrateWorkSettings(value: Partial<WorkSettings> & Record<string, unknown>): WorkSettings {
+  if (Array.isArray(value.reminders)) {
+    return { reminders: value.reminders as WorkSettings['reminders'] }
+  }
+  const reminders: WorkSettings['reminders'] = []
+  const legacyEntries = [
+    ['lunch', '午休时间到了'],
+    ['offWork', '下班啦，今天也辛苦了'],
+  ] as const
+  for (const [id, content] of legacyEntries) {
+    const legacy = value[id] as Omit<WorkSettings['reminders'][number], 'id' | 'content'> | undefined
+    if (legacy) reminders.push({ id, content, ...legacy })
+  }
+  return { reminders }
+}
 
 function readWorkSettings(): WorkSettings {
   const saved = localStorage.getItem(WORK_SETTINGS_KEY)
   if (!saved) return defaultWorkSettings()
   try {
-    const parsed = JSON.parse(saved) as Partial<WorkSettings>
-    const defaults = defaultWorkSettings()
-    return {
-      lunch: { ...defaults.lunch, ...parsed.lunch },
-      offWork: { ...defaults.offWork, ...parsed.offWork },
-    }
+    const parsed = JSON.parse(saved) as Partial<WorkSettings> & Record<string, unknown>
+    return migrateWorkSettings(parsed)
   } catch {
     return defaultWorkSettings()
   }
@@ -175,18 +179,6 @@ export async function purgeDiaryEntry(id: number): Promise<void> {
   else await diaryBrowserStore.purgeDiaryEntry(id)
 }
 
-export async function getShortcutInfo(): Promise<ShortcutInfo> {
-  return nativeApp
-    ? invoke<ShortcutInfo>('get_shortcut_info')
-    : { label: 'Ctrl + Alt + Space', registered: true }
-}
-
-export async function setShortcut(label: string): Promise<ShortcutInfo> {
-  return nativeApp
-    ? invoke<ShortcutInfo>('set_shortcut', { label })
-    : { label, registered: true }
-}
-
 async function notifyChanged(): Promise<void> {
   if (nativeApp) await emit('tasks:changed')
   else window.dispatchEvent(new Event('tasks:changed'))
@@ -329,11 +321,6 @@ export async function subscribeToChanges(callback: () => void): Promise<() => vo
   return () => window.removeEventListener('tasks:changed', callback)
 }
 
-export async function subscribeToQuickAdd(callback: () => void): Promise<() => void> {
-  if (!nativeApp) return () => undefined
-  return listen('quick-add:show', callback)
-}
-
 export async function subscribeToQuitRequest(callback: () => void): Promise<() => void> {
   if (!nativeApp) return () => undefined
   return listen('app:quit-requested', callback)
@@ -341,9 +328,4 @@ export async function subscribeToQuitRequest(callback: () => void): Promise<() =
 
 export async function exitApp(): Promise<void> {
   if (nativeApp) await invoke('exit_app')
-}
-
-export async function hideQuickAdd(): Promise<void> {
-  if (nativeApp) await invoke('hide_quick_add')
-  else window.location.href = '/'
 }

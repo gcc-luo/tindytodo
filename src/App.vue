@@ -8,9 +8,8 @@ import {
 } from 'lucide-vue-next'
 import TaskDetails from './components/TaskDetails.vue'
 import TaskRow from './components/TaskRow.vue'
-import QuickAddWindow from './components/QuickAddWindow.vue'
 import {
-  createList, createTask, deleteList, deleteTask, getAppData, getShortcutInfo, reorderTasks, setShortcut,
+  createList, createTask, deleteList, deleteTask, getAppData, reorderTasks,
   renameList, subscribeToChanges, toggleTask, updateTask, defaultWorkSettings, getWorkSettings, saveWorkSettings,
   getDiaryData, subscribeToQuitRequest, exitApp,
 } from './api'
@@ -18,13 +17,12 @@ import { countTasks, filterTasks, localDateKey } from './lib/taskFilters'
 import { flushBeforeAppExit, switchWorkspace as transitionWorkspace, type WorkspaceState } from './lib/diaryWorkspace'
 import { copyText } from './lib/clipboard'
 import { formatListForCopy, formatTaskForCopy } from './lib/taskCopy'
-import { crossedOccurrence, formatCountdown, nextReminder, type ReminderKind } from './lib/workReminders'
-import type { AppData, DiaryData, TaskDraft, TaskView, TodoList, TaskChanges, TodoTask, WorkSettings } from './types'
+import { crossedOccurrence, formatCountdown, nextReminder } from './lib/workReminders'
+import type { AppData, DiaryData, TaskDraft, TaskView, TodoList, TaskChanges, TodoTask, WorkReminderSettings, WorkSettings } from './types'
 
 type AppView = TaskView
 const DiaryWorkspace = defineAsyncComponent(() => import('./components/DiaryWorkspace.vue'))
 
-const isQuickAdd = new URLSearchParams(window.location.search).has('quickAdd')
 const nativeApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 const appData = ref<AppData>({ tasks: [], lists: [] })
 const loading = ref(true)
@@ -37,8 +35,6 @@ const selectedId = ref<number | null>(null)
 const searchOpen = ref(false)
 const searchQuery = ref('')
 const toast = ref('')
-const shortcutLabel = ref('Ctrl + Alt + Space')
-const shortcutRegistered = ref(true)
 const settingsOpen = ref(false)
 const updateStatus = ref('')
 const checkingForUpdates = ref(false)
@@ -46,7 +42,8 @@ const updateProgress = ref<number | null>(null)
 const workSettings = ref<WorkSettings>(defaultWorkSettings())
 const settingsDraft = ref<WorkSettings>(defaultWorkSettings())
 const reminderNow = ref(new Date())
-const celebration = ref<ReminderKind | null>(null)
+const celebration = ref<WorkReminderSettings | null>(null)
+const reminderQueue = ref<WorkReminderSettings[]>([])
 const addTitle = ref('')
 const addOptionsOpen = ref(false)
 const addDate = ref(localDateKey())
@@ -111,7 +108,6 @@ const nextWorkReminder = computed(() => nextReminder(workSettings.value, reminde
 const reminderCountdown = computed(() => nextWorkReminder.value
   ? formatCountdown(nextWorkReminder.value.at, reminderNow.value)
   : '')
-const reminderTitle = computed(() => nextWorkReminder.value?.kind === 'offWork' ? '距离下班' : '距离午休')
 
 function dateLabel(date: Date): string {
   return new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(date)
@@ -155,9 +151,6 @@ async function loadData(): Promise<void> {
       addListId.value = defaultAddListId(activeView.value, appData.value)
     }
     workSettings.value = await getWorkSettings()
-    const shortcut = await getShortcutInfo()
-    shortcutLabel.value = shortcut.label
-    shortcutRegistered.value = shortcut.registered
     if (selectedId.value && !appData.value.tasks.some((task) => task.id === selectedId.value)) selectedId.value = null
   } catch (error) {
     flash(error instanceof Error ? error.message : String(error))
@@ -198,10 +191,7 @@ function rememberDiaryDate(date: string): void {
 }
 
 function cloneWorkSettings(settings: WorkSettings): WorkSettings {
-  return {
-    lunch: { ...settings.lunch },
-    offWork: { ...settings.offWork },
-  }
+  return { reminders: settings.reminders.map((reminder) => ({ ...reminder })) }
 }
 
 function openSettings(): void {
@@ -210,18 +200,39 @@ function openSettings(): void {
 }
 
 function validateWorkSettings(settings: WorkSettings): string | null {
-  for (const reminder of [settings.lunch, settings.offWork]) {
+  for (const reminder of settings.reminders) {
     if (!reminder.enabled) continue
+    if (!reminder.content.trim()) return '请填写提醒内容'
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(reminder.time)) return '请输入有效的提醒时间'
     if (reminder.repeat === 'once' && !reminder.date) return '一次性提醒需要选择日期'
   }
   return null
 }
 
-function changeReminderRepeat(kind: 'lunch' | 'offWork'): void {
-  const reminder = settingsDraft.value[kind]
+function changeReminderRepeat(reminder: WorkReminderSettings): void {
   if (reminder.repeat === 'daily') reminder.date = null
   else if (!reminder.date) reminder.date = today.value
+  reminder.completed = false
+}
+
+function addReminder(): void {
+  settingsDraft.value.reminders.push({
+    id: crypto.randomUUID(),
+    content: '',
+    enabled: true,
+    time: '18:00',
+    repeat: 'daily',
+    date: null,
+    completed: false,
+  })
+}
+
+function removeReminder(id: string): void {
+  settingsDraft.value.reminders = settingsDraft.value.reminders.filter((reminder) => reminder.id !== id)
+}
+
+function toggleReminder(reminder: WorkReminderSettings): void {
+  if (reminder.enabled) reminder.completed = false
 }
 
 async function saveSettings(): Promise<void> {
@@ -234,7 +245,7 @@ async function saveSettings(): Promise<void> {
     await saveWorkSettings(settingsDraft.value)
     workSettings.value = cloneWorkSettings(settingsDraft.value)
     settingsOpen.value = false
-    flash('工作时间提醒已保存')
+    flash('提醒设置已保存')
   } catch (error) {
     flash(error instanceof Error ? error.message : String(error))
   }
@@ -261,7 +272,7 @@ async function copyActiveList(): Promise<void> {
 }
 
 async function setCelebrationWindow(fullscreen: boolean): Promise<void> {
-  if (!nativeApp || isQuickAdd) return
+  if (!nativeApp) return
   const window = getCurrentWindow()
   if (fullscreen) {
     await window.unminimize()
@@ -272,8 +283,8 @@ async function setCelebrationWindow(fullscreen: boolean): Promise<void> {
   await window.setFocus()
 }
 
-async function showCelebration(kind: ReminderKind): Promise<void> {
-  celebration.value = kind
+async function showCelebration(reminder: WorkReminderSettings): Promise<void> {
+  celebration.value = reminder
   try {
     await setCelebrationWindow(true)
   } catch (error) {
@@ -283,6 +294,11 @@ async function showCelebration(kind: ReminderKind): Promise<void> {
 
 async function dismissCelebration(): Promise<void> {
   if (!celebration.value) return
+  const next = reminderQueue.value.shift()
+  if (next) {
+    celebration.value = next
+    return
+  }
   celebration.value = null
   try {
     await setCelebrationWindow(false)
@@ -291,13 +307,13 @@ async function dismissCelebration(): Promise<void> {
   }
 }
 
-async function triggerReminder(kind: ReminderKind): Promise<void> {
-  const reminder = workSettings.value[kind]
+async function triggerReminder(reminder: WorkReminderSettings): Promise<void> {
   if (!reminder.enabled) return
   if (reminder.repeat === 'once') {
     const updated: WorkSettings = {
-      ...workSettings.value,
-      [kind]: { ...reminder, enabled: false, completed: true },
+      reminders: workSettings.value.reminders.map((item) => item.id === reminder.id
+        ? { ...item, enabled: false, completed: true }
+        : item),
     }
     try {
       await saveWorkSettings(updated)
@@ -306,7 +322,8 @@ async function triggerReminder(kind: ReminderKind): Promise<void> {
       flash(error instanceof Error ? error.message : String(error))
     }
   }
-  await showCelebration(kind)
+  if (celebration.value) reminderQueue.value.push(reminder)
+  else await showCelebration(reminder)
 }
 
 async function tickReminders(): Promise<void> {
@@ -318,13 +335,12 @@ async function tickReminders(): Promise<void> {
     reminderNow.value = now
     previousReminderTime = now
     if (!previous) return
-    for (const kind of ['lunch', 'offWork'] as ReminderKind[]) {
-      const reminder = workSettings.value[kind]
+    for (const reminder of workSettings.value.reminders) {
       if (!crossedOccurrence(reminder, previous, now)) continue
-      const key = `${kind}:${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`
+      const key = `${reminder.id}:${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`
       if (triggeredReminders.has(key)) continue
       triggeredReminders.add(key)
-      await triggerReminder(kind)
+      await triggerReminder(reminder)
     }
   } finally {
     reminderTickBusy = false
@@ -511,17 +527,6 @@ function closeSearch(): void {
   searchOpen.value = false
 }
 
-async function changeShortcut(label: string): Promise<void> {
-  try {
-    const info = await setShortcut(label)
-    shortcutLabel.value = info.label
-    shortcutRegistered.value = info.registered
-    flash(`快速记录快捷键已设为 ${info.label}`)
-  } catch (error) {
-    flash(error instanceof Error ? error.message : String(error))
-  }
-}
-
 async function checkForUpdates(): Promise<void> {
   if (checkingForUpdates.value) return
   checkingForUpdates.value = true
@@ -559,7 +564,6 @@ async function checkForUpdates(): Promise<void> {
 }
 
 onMounted(async () => {
-  if (isQuickAdd) return
   await loadData()
   unlisten = await subscribeToChanges(() => { void loadData() })
   unlistenQuitRequest = await subscribeToQuitRequest(() => { void handleQuitRequest() })
@@ -578,9 +582,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <QuickAddWindow v-if="isQuickAdd" />
   <DiaryWorkspace
-    v-else-if="activeWorkspace === 'diary'"
+    v-if="activeWorkspace === 'diary'"
     ref="diaryWorkspaceRef"
     :data="diaryData"
     :initial-date="workspaceState.selectedDate"
@@ -643,14 +646,9 @@ onBeforeUnmount(() => {
       <div class="sidebar-bottom">
         <button class="work-settings-entry" type="button" @click="openSettings">
           <span class="work-settings-entry-icon"><Clock3 :size="15" /></span>
-          <span><strong>设置工作时间</strong><small>午休 / 下班提醒</small></span>
+          <span><strong>设置提醒</strong><small>自定义时间与内容</small></span>
           <ChevronRight :size="14" />
         </button>
-        <div class="shortcut-hint" :title="shortcutRegistered ? `快速记录：${shortcutLabel}` : '快捷键都被占用；仍可在主窗口快速添加'">
-          <Sparkles :size="14" /><span>快速记录</span>
-          <template v-if="shortcutRegistered"><kbd v-for="part in shortcutLabel.split(' + ')" :key="part">{{ part }}</kbd></template>
-          <span v-else class="shortcut-unavailable">未注册</span>
-        </div>
         <div class="open-count"><span class="status-dot"></span>{{ totalOpen }} 件待处理</div>
       </div>
     </aside>
@@ -665,15 +663,15 @@ onBeforeUnmount(() => {
             <button class="icon-button" type="button" aria-label="关闭搜索" @click="closeSearch"><X :size="15" /></button>
           </label>
           <button v-else class="icon-button search-trigger" type="button" aria-label="搜索任务" title="搜索任务" @click="beginSearch"><Search :size="17" /></button>
-          <button class="settings-trigger" type="button" title="设置工作时间和应用选项" aria-label="设置" @click="openSettings"><Settings2 :size="16" /><span>设置</span></button>
+          <button class="settings-trigger" type="button" title="提醒设置和应用选项" aria-label="设置" @click="openSettings"><Settings2 :size="16" /><span>设置</span></button>
           <div class="avatar">T</div>
         </div>
       </header>
 
       <div v-if="nextWorkReminder" class="work-reminder-bar" role="status">
-        <div class="work-reminder-copy"><Sparkles :size="15" /><span>{{ reminderTitle }}</span></div>
+        <div class="work-reminder-copy"><Sparkles :size="15" /><span>{{ nextWorkReminder.reminder.content }}</span></div>
         <strong>{{ reminderCountdown }}</strong>
-        <span class="work-reminder-hint">{{ nextWorkReminder.kind === 'offWork' ? '今天也辛苦了' : '记得起来休息一下' }}</span>
+        <span class="work-reminder-hint">下一条提醒</span>
       </div>
 
       <div class="content-scroll">
@@ -779,28 +777,27 @@ onBeforeUnmount(() => {
       <section class="new-list-modal settings-modal">
         <div class="modal-icon"><Settings2 :size="18" /></div>
         <h2>设置</h2>
-        <p>调整工作节奏提醒、快速记录快捷键，或检查 TinyTodo 更新。</p>
+        <p>设置提醒时间和内容，或检查 TinyTodo 更新。</p>
         <div class="work-settings-section">
-          <div class="settings-section-heading"><strong>工作节奏</strong><span>到点提醒你休息和下班</span></div>
-          <div v-for="item in ([['lunch', '午休提醒'], ['offWork', '下班提醒']] as const)" :key="item[0]" class="reminder-setting-card">
+          <div class="settings-section-heading">
+            <span><strong>提醒设置</strong><small>到点后全屏提醒，可点击关闭</small></span>
+            <button class="add-reminder-button" type="button" @click="addReminder"><Plus :size="14" />添加提醒</button>
+          </div>
+          <p v-if="!settingsDraft.reminders.length" class="reminder-empty">还没有提醒，添加一条自定义提醒吧。</p>
+          <div v-for="reminder in settingsDraft.reminders" :key="reminder.id" class="reminder-setting-card">
             <div class="reminder-setting-head">
-              <label class="reminder-toggle"><input v-model="settingsDraft[item[0]].enabled" type="checkbox" /><span class="toggle-track"></span><strong>{{ item[1] }}</strong></label>
-              <input v-model="settingsDraft[item[0]].time" class="reminder-time" type="time" :disabled="!settingsDraft[item[0]].enabled" />
+              <label class="reminder-toggle"><input v-model="reminder.enabled" type="checkbox" @change="toggleReminder(reminder)" /><span class="toggle-track"></span><strong>{{ reminder.enabled ? '已开启' : '已暂停' }}</strong></label>
+              <input v-model="reminder.time" class="reminder-time" type="time" :disabled="!reminder.enabled" />
+              <button class="icon-button reminder-remove" type="button" aria-label="删除提醒" title="删除提醒" @click="removeReminder(reminder.id)"><Trash2 :size="14" /></button>
             </div>
-            <div class="reminder-setting-fields" :class="{ disabled: !settingsDraft[item[0]].enabled }">
-              <label><span>重复</span><select v-model="settingsDraft[item[0]].repeat" :disabled="!settingsDraft[item[0]].enabled" @change="changeReminderRepeat(item[0])"><option value="daily">每天重复</option><option value="once">一次性</option></select></label>
-              <label v-if="settingsDraft[item[0]].repeat === 'once'"><span>日期</span><input v-model="settingsDraft[item[0]].date" type="date" :min="today" :disabled="!settingsDraft[item[0]].enabled" /></label>
+            <input v-model="reminder.content" class="reminder-content-input" maxlength="100" placeholder="写下提醒内容…" aria-label="提醒内容" />
+            <div class="reminder-setting-fields" :class="{ disabled: !reminder.enabled }">
+              <label><span>重复</span><select v-model="reminder.repeat" :disabled="!reminder.enabled" @change="changeReminderRepeat(reminder)"><option value="daily">每天重复</option><option value="once">一次性</option></select></label>
+              <label v-if="reminder.repeat === 'once'"><span>日期</span><input v-model="reminder.date" type="date" :min="today" :disabled="!reminder.enabled" /></label>
             </div>
           </div>
-          <p class="settings-note">下班时间到达后，当前显示器会全屏撒花庆祝；点击屏幕或按 Esc 退出。</p>
+          <p class="settings-note">到达设定时间后，当前显示器会全屏显示提醒；点击屏幕或按 Esc 关闭。</p>
         </div>
-        <label class="settings-label" for="shortcut-select">快速记录</label>
-        <select id="shortcut-select" class="settings-select" :value="shortcutLabel" @change="changeShortcut(($event.target as HTMLSelectElement).value)">
-          <option value="Ctrl + Shift + Space">Ctrl + Shift + Space</option>
-          <option value="Ctrl + Alt + Space">Ctrl + Alt + Space</option>
-          <option value="Alt + Shift + T">Alt + Shift + T</option>
-        </select>
-        <p class="settings-note">快捷键若被其他程序占用，会保留当前设置。应用关闭时会收进系统托盘。</p>
         <div class="update-row">
           <div class="update-copy">
             <strong>软件更新</strong>
@@ -822,9 +819,9 @@ onBeforeUnmount(() => {
       <div class="celebration-confetti" aria-hidden="true"><span v-for="n in 34" :key="n" :style="{ '--i': n }"></span></div>
       <div class="celebration-message">
         <Sparkles :size="42" stroke-width="1.4" />
-        <p class="celebration-kicker">{{ celebration === 'offWork' ? '工作完成' : '休息一下' }}</p>
-        <h2>{{ celebration === 'offWork' ? '下班啦，今天也辛苦了' : '午休时间到了' }}</h2>
-        <p>点击任意位置关闭庆祝</p>
+        <p class="celebration-kicker">提醒时间到了</p>
+        <h2>{{ celebration.content }}</h2>
+        <p>点击任意位置或按 Esc 关闭提醒</p>
       </div>
     </div>
   </div>
