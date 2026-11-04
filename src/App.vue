@@ -19,6 +19,7 @@ import { copyText } from './lib/clipboard'
 import { formatListForCopy, formatTaskForCopy } from './lib/taskCopy'
 import { crossedOccurrence, formatCountdown, nextReminder } from './lib/workReminders'
 import type { AppData, DiaryData, TaskDraft, TaskView, TodoList, TaskChanges, TodoTask, WorkReminderSettings, WorkSettings } from './types'
+import packageJson from '../package.json'
 
 type AppView = TaskView
 const DiaryWorkspace = defineAsyncComponent(() => import('./components/DiaryWorkspace.vue'))
@@ -594,7 +595,10 @@ onBeforeUnmount(() => {
     <aside class="sidebar">
       <div class="brand-row">
         <div class="brand-mark"><Check :size="18" stroke-width="2.5" /></div>
-        <div class="brand-wordmark"><strong>TinyTodo</strong><span>留一点空间给重要的事</span></div>
+        <div class="brand-wordmark">
+          <strong>TinyTodo</strong>
+          <div class="brand-meta"><span>留一点空间给重要的事</span><span class="brand-version">v{{ packageJson.version }}</span></div>
+        </div>
       </div>
 
       <div class="workspace-switcher" role="group" aria-label="工作区">
@@ -816,14 +820,14 @@ onBeforeUnmount(() => {
         <div class="modal-actions"><button class="text-button" type="button" @click="settingsOpen = false">取消</button><button class="modal-primary" type="button" @click="saveSettings">保存设置</button></div>
       </section>
     </div>
-    <div v-if="celebration" class="celebration-screen" role="dialog" aria-modal="true" @click="dismissCelebration">
-      <div class="celebration-confetti" aria-hidden="true"><span v-for="n in 34" :key="n" :style="{ '--i': n }"></span></div>
-      <div class="celebration-message">
-        <Sparkles :size="42" stroke-width="1.4" />
-        <p class="celebration-kicker">提醒时间到了</p>
-        <h2>{{ celebration.content }}</h2>
-        <p>点击任意位置或按 Esc 关闭提醒</p>
-      </div>
+  </div>
+  <div v-if="celebration" class="celebration-screen" role="dialog" aria-modal="true" @click="dismissCelebration">
+    <div class="celebration-confetti" aria-hidden="true"><span v-for="n in 34" :key="n" :style="{ '--i': n }"></span></div>
+    <div class="celebration-message">
+      <Sparkles :size="42" stroke-width="1.4" />
+      <p class="celebration-kicker">提醒时间到了</p>
+      <h2>{{ celebration.content }}</h2>
+      <p>点击任意位置或按 Esc 关闭提醒</p>
     </div>
   </div>
 </template>

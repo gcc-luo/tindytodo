@@ -36,9 +36,11 @@ button:disabled { opacity: .45; cursor: default; }
 .brand-mark.small { width: 31px; height: 31px; flex-basis: 31px; border-radius: 10px; }
 .brand-mark.small span { position: relative; width: 14px; height: 14px; border: 2px solid #fff; border-radius: 50%; }
 .brand-mark.small span::after { position: absolute; right: -3px; bottom: -2px; width: 7px; height: 3px; border-radius: 2px; background: #fff; content: ''; transform: rotate(-48deg); }
-.brand-wordmark { display: flex; flex-direction: column; gap: 2px; }
+.brand-wordmark { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .brand-wordmark strong { font: 700 17px/1.1 'Segoe UI', 'Microsoft YaHei UI', sans-serif; letter-spacing: -.5px; }
-.brand-wordmark span { color: #969d94; font-size: 10px; letter-spacing: .1px; }
+.brand-meta { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.brand-meta > span:first-child { color: #969d94; font-size: 10px; letter-spacing: .1px; }
+.brand-version { display: inline-flex; align-items: center; padding: 2px 5px; border: 1px solid #dfeade; border-radius: 999px; background: #f3f7f1; color: #718d73; font: 600 9px/1 'Segoe UI', sans-serif; font-variant-numeric: tabular-nums; letter-spacing: .15px; }
 .primary-nav, .list-nav { display: flex; flex-direction: column; gap: 3px; }
 .nav-item { position: relative; display: flex; width: 100%; min-height: 39px; align-items: center; gap: 11px; padding: 0 11px; border: 0; border-radius: 7px; background: transparent; color: #707970; cursor: pointer; text-align: left; transition: background .14s ease, color .14s ease; }
 .nav-item > svg { flex: 0 0 auto; color: #899188; stroke-width: 1.8; }
