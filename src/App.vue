@@ -408,7 +408,7 @@ async function removeTask(id: number): Promise<void> {
   try {
     await deleteTask(id)
     appData.value.tasks = appData.value.tasks.filter((task) => task.id !== id)
-    selectedId.value = null
+    if (selectedId.value === id) selectedId.value = null
     flash('任务已删除')
   } catch (error) {
     flash(error instanceof Error ? error.message : String(error))
@@ -719,6 +719,7 @@ onBeforeUnmount(() => {
               :drop-target="dragTargetId === task.id"
               @toggle="completeTask"
               @copy="copyTask(task)"
+              @delete="removeTask"
               @select="selectedId = selectedId === $event ? null : $event"
               @drag-start="draggingId = $event"
               @drag-over="dragTargetId = $event"

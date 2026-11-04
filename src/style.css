@@ -148,6 +148,8 @@ kbd { min-width: 19px; padding: 2px 4px; border: 1px solid #e7ebe4; border-radiu
 .drag-handle:active { cursor: grabbing; }
 .task-copy-button { width: 28px; height: 28px; color: #9aa398; }
 .task-copy-button:hover { background: #edf4ef; color: #4e8065; }
+.task-delete-button { width: 28px; height: 28px; color: #b4a39a; }
+.task-delete-button:hover { background: #fbefec; color: #b85e4e; }
 .check-button { display: grid; width: 18px; height: 18px; flex: 0 0 18px; place-items: center; padding: 0; border: 1.5px solid #c7d0c6; border-radius: 50%; background: white; color: white; cursor: pointer; transition: all .15s; }
 .check-button:hover { border-color: #6d9a79; background: #edf4ef; }
 .check-button.checked { border-color: #6f9a7a; background: #6f9a7a; }

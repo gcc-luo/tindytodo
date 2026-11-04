@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CalendarDays, Clock3, Copy, GripVertical, Star } from 'lucide-vue-next'
+import { CalendarDays, Clock3, Copy, GripVertical, Star, Trash2 } from 'lucide-vue-next'
 import type { TodoTask } from '../types'
 import { localDateKey } from '../lib/taskFilters'
 
@@ -20,6 +20,7 @@ const emit = defineEmits<{
   drop: [id: number]
   dragEnd: []
   copy: []
+  delete: [id: number]
 }>()
 
 function dateLabel(value: string): string {
@@ -88,6 +89,15 @@ function startDrag(event: DragEvent): void {
       @click.stop="emit('copy')"
     >
       <Copy :size="14" />
+    </button>
+    <button
+      class="task-delete-button icon-button"
+      type="button"
+      title="删除任务"
+      aria-label="删除任务"
+      @click.stop="emit('delete', task.id)"
+    >
+      <Trash2 :size="14" />
     </button>
   </article>
 </template>
