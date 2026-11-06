@@ -65,6 +65,7 @@ export function createDiaryAutosave<T>(
       snapshot = nextSnapshot
       revision += 1
       dirty = true
+      setStatus('saving')
       clearTimer()
       timer = setTimeout(() => { void flush().catch(() => undefined) }, delay)
     },

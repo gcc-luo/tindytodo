@@ -347,7 +347,7 @@ kbd { min-width: 19px; padding: 2px 4px; border: 1px solid #e7ebe4; border-radiu
 .diary-emoji-menu button { min-width: 29px; font-size: 17px; }
 .diary-image-file-input { display: none; }
 .diary-editor-content { min-height: 0; flex: 1; overflow: auto; padding: 28px 24px 70px; }
-.diary-editor-prosemirror { width: min(760px, 100%); min-height: 100%; margin: 0 auto; outline: none; color: #3d473f; font-size: 15px; line-height: 1.9; overflow-wrap: anywhere; }
+.diary-editor-prosemirror { width: 100%; min-height: 100%; margin: 0; outline: none; color: #3d473f; font-size: 15px; line-height: 1.9; overflow-wrap: anywhere; }
 .diary-editor-prosemirror > p:first-child:empty::before { color: #b7beb6; content: '写下今天值得记住的事…'; pointer-events: none; }
 .diary-editor-prosemirror h1, .diary-editor-prosemirror h2, .diary-editor-prosemirror h3 { margin: 1.4em 0 .55em; color: #344439; line-height: 1.35; }
 .diary-editor-prosemirror h1 { font-size: 1.8em; }
@@ -494,3 +494,11 @@ kbd { min-width: 19px; padding: 2px 4px; border: 1px solid #e7ebe4; border-radiu
   .diary-title-input { font-size: 22px; }
   .diary-move-trash { gap: 4px; padding-right: 7px; padding-left: 7px; font-size: 9px; }
 }
+
+/* Keep writing controls accessible at narrow window widths. */
+.diary-editor-toolbar { flex-wrap: wrap; overflow: visible; height: auto; }
+.diary-writing-area { position: relative; min-height: 0; flex: 1; display: flex; flex-direction: column; }
+.diary-writing-placeholder { position: absolute; top: 30px; left: 24px; margin: 0; color: #aab6a9; pointer-events: none; }
+.diary-writing-area .diary-editor-content { flex: 1; }
+
+@media (max-width: 720px) { .diary-writing-placeholder { left: 20px; } }

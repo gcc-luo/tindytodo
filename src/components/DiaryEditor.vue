@@ -24,6 +24,7 @@ const props = defineProps<{
   tags: DiaryTag[]
   saveStatus?: 'idle' | 'saving' | 'saved' | 'error'
   saveError?: string
+  autofocus?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -34,7 +35,6 @@ const emit = defineEmits<{
 
 const title = ref(props.entry.title)
 const selectedTagIds = ref([...props.entry.tag_ids])
-const titleInput = ref<HTMLInputElement>()
 watch(() => props.entry.tag_ids, (ids) => { selectedTagIds.value = [...ids] })
 const fileInput = ref<HTMLInputElement>()
 const emojiMenuOpen = ref(false)
@@ -43,8 +43,14 @@ const fontFamily = ref('Microsoft YaHei')
 const fontSize = ref('16px')
 const activeTagIds = computed(() => selectedTagIds.value)
 const statusText = computed(() => ({
-  idle: '尚未保存', saving: '正在保存', saved: '已保存', error: '保存失败',
+  idle: '尚未保存', saving: '正在保存', saved: `已保存 · ${formatSavedTime(props.entry.updated_at)}`, error: '保存失败',
 }[props.saveStatus ?? 'idle']))
+
+function formatSavedTime(value: string) {
+  const normalized = value.includes('T') ? value : `${value.replace(' ', 'T')}Z`
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
 
 const imageNode = DiaryImage.extend({
   addNodeView() {
@@ -184,7 +190,7 @@ async function handleFileChange(event: Event) {
 const emojis = ['🙂', '😊', '❤️', '✨', '🌿', '☕', '🎉', '🌤️']
 
 onMounted(() => {
-  if (!props.entry.title) titleInput.value?.focus()
+  if (props.autofocus) editor.value?.commands.focus('end')
 })
 </script>
 
@@ -192,8 +198,8 @@ onMounted(() => {
   <section class="diary-editor-shell">
     <header class="diary-entry-heading">
       <div>
-        <p class="diary-date-line">{{ entry.entry_date }}</p>
-        <input ref="titleInput" class="diary-title-input" :value="entry.title" placeholder="给这篇日记起个标题" maxlength="200" @input="updateTitle">
+        <p class="diary-date-line">记录日期 {{ entry.entry_date }}</p>
+        <input class="diary-title-input" :value="entry.title" placeholder="给这篇日记起个标题" maxlength="200" @input="updateTitle">
         <p class="diary-entry-meta">创建于 {{ new Date(entry.created_at).toLocaleString() }}</p>
       </div>
       <div class="diary-entry-actions">
@@ -251,6 +257,6 @@ onMounted(() => {
 
     <p v-if="saveError" class="diary-editor-error" role="alert">{{ saveError }}</p>
     <p v-if="imageError" class="diary-editor-error" role="alert">{{ imageError }}</p>
-    <EditorContent :editor="editor" class="diary-editor-content" />
+    <div class="diary-writing-area"><p v-if="editor?.isEmpty" class="diary-writing-placeholder" aria-hidden="true">今天发生了什么？</p><EditorContent :editor="editor" class="diary-editor-content" /></div>
   </section>
 </template>

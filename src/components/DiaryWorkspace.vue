@@ -38,6 +38,7 @@ const saveStatus = ref<DiarySaveStatus>('idle')
 const saveError = ref('')
 const notice = ref('')
 const loading = ref(false)
+const newEntryId = ref<number | null>(null)
 let autosave: ReturnType<typeof createDiaryAutosave<DiarySnapshot>> | null = null
 let noticeTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -140,6 +141,7 @@ function receiveSnapshot(snapshot: DiarySnapshot) {
 
 async function selectEntry(entry: DiaryEntry) {
   if (selectedEntryId.value === entry.id) return
+  newEntryId.value = null
   if (!await flushBeforeNavigation()) return
   autosave?.dispose()
   autosave = null
@@ -163,6 +165,7 @@ async function selectDate(date: string) {
   if (!await flushBeforeNavigation()) return
   autosave?.dispose()
   autosave = null
+  newEntryId.value = null
   selectedEntryId.value = null
   trashView.value = false
   selectedDate.value = date
@@ -176,6 +179,7 @@ async function createEntry() {
   try {
     const entry = await createDiaryEntry(selectedDate.value || todayKey.value)
     entries.value = [...entries.value, entry]
+    newEntryId.value = entry.id
     selectedEntryId.value = entry.id
     selectedDate.value = entry.entry_date
     emit('dateChange', entry.entry_date)
@@ -440,6 +444,7 @@ async function retrySave() {
         v-else-if="selectedEntry"
         :key="selectedEntry.id"
         :entry="selectedEntry"
+        :autofocus="newEntryId === selectedEntry.id"
         :tags="tags"
         :save-status="saveStatus"
         :save-error="saveError"
