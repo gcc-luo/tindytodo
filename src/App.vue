@@ -35,6 +35,11 @@ const diaryWorkspaceRef = ref<{ flushBeforeExit: () => Promise<boolean> } | null
 const selectedId = ref<number | null>(null)
 const searchOpen = ref(false)
 const searchQuery = ref('')
+const completedListSelection = ref('all')
+const completedListFilter = computed(() => {
+  const value = completedListSelection.value
+  return value === 'all' || (value !== 'none' && !appData.value.lists.some((list) => String(list.id) === value)) ? 'all' : value
+})
 const toast = ref('')
 const settingsOpen = ref(false)
 const updateStatus = ref('')
@@ -78,6 +83,7 @@ const visibleTasks = computed(() => filterTasks(
   today.value,
   searchQuery.value,
   appData.value.lists,
+  completedListFilter.value === 'all' ? undefined : completedListFilter.value === 'none' ? null : Number(completedListFilter.value),
 ))
 const selectedTask = computed(() => appData.value.tasks.find((task) => task.id === selectedId.value) ?? null)
 const totalOpen = computed(() => appData.value.tasks.filter((task) => task.status === 0).length)
@@ -686,7 +692,15 @@ onBeforeUnmount(() => {
               <h1>{{ viewTitle }}</h1>
               <p class="page-subtitle">{{ viewSubtitle }}</p>
             </div>
-            <div v-if="visibleTasks.length || activeList" class="task-heading-actions">
+            <div v-if="visibleTasks.length || activeList || (activeView === 'completed' && !searchQuery.trim())" class="task-heading-actions">
+              <label v-if="activeView === 'completed' && !searchQuery.trim()" class="completed-list-filter">
+                <span>清单</span>
+                <select :value="completedListFilter" aria-label="按清单筛选已完成任务" @change="completedListSelection = ($event.target as HTMLSelectElement).value; selectedId = null">
+                  <option value="all">全部清单</option>
+                  <option value="none">无清单</option>
+                  <option v-for="list in appData.lists" :key="list.id" :value="String(list.id)">{{ list.name }}</option>
+                </select>
+              </label>
               <button v-if="activeList" class="copy-button" type="button" :disabled="!activeListTasks.length" @click="copyActiveList"><ClipboardCopy :size="13" />复制全部</button>
               <span v-if="visibleTasks.length" class="task-total">{{ visibleTasks.length }} 件</span>
             </div>
@@ -733,8 +747,8 @@ onBeforeUnmount(() => {
           </div>
           <div v-else-if="!loading" class="empty-state">
             <div class="empty-illustration"><Archive v-if="activeView === 'inbox'" :size="24" /><CheckCheck v-else-if="activeView === 'completed'" :size="24" /><Search v-else-if="searchQuery" :size="24" /><Sun v-else :size="24" /></div>
-            <h2>{{ searchQuery ? '没有找到匹配的任务' : activeView === 'completed' ? '完成的任务会出现在这里' : activeView === 'today' ? '今天还没有安排' : activeView === 'inbox' ? '收集箱空空的' : '这里暂时没有任务' }}</h2>
-            <p>{{ searchQuery ? '试试换个关键词' : activeView === 'completed' ? '每完成一件事，就勾选它吧。' : activeView === 'today' ? '先把要做的事记下来，再慢慢安排。' : '写下第一件要做的事，开始整理。' }}</p>
+            <h2>{{ searchQuery ? '没有找到匹配的任务' : activeView === 'completed' && completedListFilter !== 'all' ? '该清单暂无已完成任务' : activeView === 'completed' ? '完成的任务会出现在这里' : activeView === 'today' ? '今天还没有安排' : activeView === 'inbox' ? '收集箱空空的' : '这里暂时没有任务' }}</h2>
+            <p>{{ searchQuery ? '试试换个关键词' : activeView === 'completed' && completedListFilter !== 'all' ? '可以切换清单或查看全部已完成任务。' : activeView === 'completed' ? '每完成一件事，就勾选它吧。' : activeView === 'today' ? '先把要做的事记下来，再慢慢安排。' : '写下第一件要做的事，开始整理。' }}</p>
             <button v-if="activeView !== 'completed' && !searchQuery" class="empty-add" type="button" @click="addInput?.focus()"><Plus :size="15" /> 添加任务</button>
           </div>
 

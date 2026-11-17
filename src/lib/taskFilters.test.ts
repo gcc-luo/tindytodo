@@ -25,6 +25,18 @@ describe('task view filters', () => {
     expect(filterTasks(tasks, 'today', '2026-09-17', '已完成').map((task) => task.id)).toEqual([5])
   })
 
+  it('filters completed tasks by list or no list while preserving global search', () => {
+    const extra: TodoTask[] = [
+      { ...tasks[4], id: 6, title: '工作完成', list_id: 1 },
+      { ...tasks[4], id: 7, title: '生活完成', list_id: 2 },
+    ]
+    const all = [...tasks, ...extra]
+    expect(filterTasks(all, 'completed', '2026-09-17', '', [], 1).map((task) => task.id)).toEqual([6])
+    expect(filterTasks(all, 'completed', '2026-09-17', '', [], null).map((task) => task.id)).toEqual([5])
+    expect(filterTasks(all, 'completed', '2026-09-17').map((task) => task.id)).toEqual([5, 6, 7])
+    expect(filterTasks(all, 'completed', '2026-09-17', '今天', [], 1).map((task) => task.id)).toEqual([1])
+  })
+
   it('counts overdue open tasks in Today', () => {
     expect(countTasks(tasks, 'today', '2026-09-17')).toBe(2)
   })

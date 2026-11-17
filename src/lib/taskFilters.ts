@@ -13,6 +13,7 @@ export function filterTasks(
   today: string,
   query = '',
   lists: TodoList[] = [],
+  completedList: number | null | undefined = undefined,
 ): TodoTask[] {
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const viewTasks = normalizedQuery
@@ -25,7 +26,7 @@ export function filterTasks(
         if (view === 'today') return task.status === 0 && !!task.due_date && task.due_date <= today
         if (view === 'inbox') return task.status === 0 && task.due_date === null
         if (view === 'planned') return task.status === 0 && !!task.due_date && task.due_date > today
-        if (view === 'completed') return task.status === 1
+        if (view === 'completed') return task.status === 1 && (completedList === undefined || task.list_id === completedList)
         return task.status === 0 && task.list_id === Number(view.slice(5))
       })
 

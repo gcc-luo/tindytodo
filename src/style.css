@@ -502,3 +502,7 @@ kbd { min-width: 19px; padding: 2px 4px; border: 1px solid #e7ebe4; border-radiu
 .diary-writing-area .diary-editor-content { flex: 1; }
 
 @media (max-width: 720px) { .diary-writing-placeholder { left: 20px; } }
+
+.completed-list-filter { display: inline-flex; align-items: center; gap: 7px; color: #7a887b; font-size: 11px; white-space: nowrap; }
+.completed-list-filter select { max-width: 160px; padding: 6px 9px; border: 1px solid #dfe8df; border-radius: 6px; background: #fff; color: #526b56; font: inherit; cursor: pointer; }
+.completed-list-filter select:focus-visible { outline: 2px solid #93b79a; outline-offset: 2px; }
